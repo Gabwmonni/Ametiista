@@ -1,0 +1,10 @@
+.env
+.venv/
+dados/
+modelos/
+__pycache__/
+voz/amostras/*
+voz/referencia/
+celular/node_modules/
+celular/.wrangler/
+celular/.dev.vars

@@ -1,0 +1,14 @@
+{
+  "name": "Ametista",
+  "short_name": "Ametista",
+  "description": "Sua assistente Ametista no celular",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d0816",
+  "theme_color": "#0d0816",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/icone-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

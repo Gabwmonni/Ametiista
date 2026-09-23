@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0816">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Ametista</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icone-192.png">
+<link rel="icon" href="/icone-192.png">
+<link rel="stylesheet" href="/estilo.css">
+</head>
+<body>
+  <!-- Pareamento -->
+  <section id="telaParear" class="tela oculta">
+    <div class="parear">
+      <div class="gema"></div>
+      <h1>Ametista</h1>
+      <p>Para conectar este celular, no PC clique com o botão direito no 💎 perto do relógio e escolha
+         <b>Parear celular</b>. Aponte a câmera para o QR code ou digite o código abaixo.</p>
+      <form id="formParear">
+        <input id="codigo" maxlength="9" autocomplete="one-time-code" autocapitalize="characters"
+               placeholder="CÓDIGO" aria-label="Código de pareamento">
+        <button type="submit">Conectar</button>
+      </form>
+      <p id="erroParear" class="erro" role="alert"></p>
+    </div>
+  </section>
+
+  <!-- Principal -->
+  <section id="telaPrincipal" class="tela oculta">
+    <header class="topo">
+      <div class="marca"><span class="mini-gema" aria-hidden="true"></span> Ametista</div>
+      <span id="pilula" class="pilula">…</span>
+    </header>
+
+    <div class="cartao-pc" id="cartaoPc">
+      <canvas id="rosto" data-transparente="1" aria-hidden="true"></canvas>
+      <div class="info-pc">
+        <div id="estadoPc" class="estado-pc">Conectando…</div>
+        <div id="detalhePc" class="detalhe-pc"></div>
+      </div>
+    </div>
+
+    <div class="atalhos" id="atalhos">
+      <button data-pedido="__tela">🖥️ Ver tela</button>
+      <button data-pedido="Pausa a música">⏯️ Pausar</button>
+      <button data-pedido="Próxima música">⏭️ Próxima</button>
+      <button data-pedido="Como está o PC?">📊 Status</button>
+      <button data-pedido="O que tenho na agenda hoje?">📅 Agenda</button>
+      <button data-pedido="Bloqueia o PC">🔒 Bloquear</button>
+    </div>
+
+    <main id="conversa" class="conversa" aria-live="polite"></main>
+
+    <form id="formPedido" class="barra">
+      <input id="entrada" autocomplete="off" placeholder="Peça algo para a Ametista…" aria-label="Mensagem">
+      <button type="button" id="btnMic" class="mic" aria-label="Segure para falar">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg>
+      </button>
+    </form>
+  </section>
+
+  <!-- Visualizador da tela do PC -->
+  <div id="modalTela" class="modal oculta" role="dialog" aria-label="Tela do PC">
+    <img id="imgTela" alt="Tela do PC">
+    <div class="modal-botoes">
+      <button id="btnAtualizarTela">Atualizar</button>
+      <button id="btnFecharTela">Fechar</button>
+    </div>
+  </div>
+
+  <script src="/rosto.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
