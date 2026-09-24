@@ -228,5 +228,7 @@ def test_instalar_fecha_nas_portas_do_env_desta_pasta(monkeypatch, tmp_path):
     assert ps.porta_do_env(tmp_path) == 9123 and ps.porta_do_env(tmp_path / "nada") is None
     portas = []
     monkeypatch.setattr(ps, "fechar_ametista", lambda porta=8765: portas.append(porta))
-    ps.main(["x", str(tmp_path)])
+    monkeypatch.setattr(ps, "problemas", lambda pasta: [])            # a pasta temporária do Windows é longa
+    monkeypatch.setattr(ps, "instalacao_anterior", lambda pasta: None)
+    assert ps.main(["x", str(tmp_path)]) == 0
     assert portas == [8765, 9123]
