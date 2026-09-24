@@ -77,13 +77,14 @@ def _falar_curto(texto: str, emocao: str, origem: str, ficha) -> str:
 
 
 def atender(texto: str, falante: Falante = DONO_PADRAO, mostrar_pedido: bool = True, origem: str = "pc",
-            sem_nome: bool = False, com_voz: bool = True) -> dict:
+            sem_nome: bool = False, com_voz: bool = True, celular: str | None = None) -> dict:
     """Bloqueante: roda numa thread de trabalho, nunca no loop do servidor.
 
     falante: quem pediu (a voz identificada). Texto digitado no PC e o celular pareado contam como o dono.
     origem: "pc" ou "celular" (a resposta do celular volta só para o celular, com o áudio inteiro).
     sem_nome: fala captada na conversa contínua, sem dizer "Ametista" (pode não ser para ela).
     com_voz: False = o celular está com a voz desligada (economiza a geração e os dados do áudio).
+    celular: qual celular pediu (arquivos pedidos por ele voltam para ele).
     """
     texto = (texto or "").strip()
     if not texto:
@@ -107,7 +108,8 @@ def atender(texto: str, falante: Falante = DONO_PADRAO, mostrar_pedido: bool = T
         estado.ocupado = True
         token_f = falante_atual.set(falante)
         troca = memoria.nova_troca()
-        token_c = ferramentas.CONTEXTO.set({"texto": texto, "troca": troca, "origem": origem, "ficha": ficha})
+        token_c = ferramentas.CONTEXTO.set({"texto": texto, "troca": troca, "origem": origem, "ficha": ficha,
+                                            "celular": celular})
         try:
             return _atender(texto, norm_limpo, falante, mostrar_pedido, origem, sem_nome, ficha, troca, com_voz)
         except Cancelado:

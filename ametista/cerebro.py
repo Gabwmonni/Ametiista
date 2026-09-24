@@ -385,7 +385,7 @@ def _contexto_falante(falante) -> str:
 
 def _prompt_contexto(falante=None, sem_nome: bool = False, tipo_modelo: str = "rapido",
                      origem: str = "pc", troca_privada: bool = False) -> str:
-    from . import agente, pc
+    from . import agente, foco, pc
 
     agora = datetime.now()
     eh_dono = falante is None or falante.nivel == "dono"
@@ -408,6 +408,9 @@ def _prompt_contexto(falante=None, sem_nome: bool = False, tipo_modelo: str = "r
         tarefas = agente.resumo_ativas()
         if tarefas:
             linhas.append(f"- Tarefas em andamento no modo agente: {tarefas}")
+        sessao = foco.resumo_contexto()
+        if sessao:
+            linhas.append(f"- {sessao}")
     if estado.privado():
         linhas.append("- MODO PRIVADO ligado: nada desta conversa é guardado. Não use lembrar_fato nem caderno_guardar.")
     elif troca_privada:
@@ -454,6 +457,10 @@ _STATUS = {
     "agenda_listar": "vendo a agenda…", "arquivos_buscar": "procurando o arquivo…", "memoria_buscar": "lembrando…",
     "steam_buscar_jogo": "procurando na Steam…", "clima": "vendo o clima…", "noticias": "lendo as notícias…",
     "agente_iniciar": "começando a tarefa…", "diagnostico": "fazendo o diagnóstico…",
+    "arquivo_ler": "lendo o arquivo…", "pasta_listar": "olhando a pasta…", "pc_processos": "vendo os programas…",
+    "limpeza_analisar": "medindo os temporários…", "limpeza_executar": "limpando…",
+    "arquivo_enviar_celular": "mandando para o celular…", "conversa_exportar": "montando o bloco de notas…",
+    "foco_relatorio": "vendo seus estudos…", "foco_parar": "fechando a sessão…",
 }
 
 

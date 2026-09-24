@@ -89,9 +89,10 @@ def iniciar_servicos() -> None:
     if _servicos_ligados:
         return
     _servicos_ligados = True
-    from . import arquivos, proatividade, rotinas, semantica
+    from . import arquivos, foco, proatividade, rotinas, semantica
 
     proatividade.iniciar()
+    foco.ligar()
     rotinas.iniciar_agendador()
     arquivos.iniciar_vigia()
     semantica.aquecer(depois=memoria.vetorizar_pendentes)   # busca por significado fica pronta sozinha

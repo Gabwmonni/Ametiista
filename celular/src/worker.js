@@ -250,6 +250,11 @@ export class Rele extends DurableObject {
       case "vivo":   // sem ninguém olhando: só marca que o PC continua ligado
         await this.ctx.storage.put("pc", pc);
         return;
+      case "arquivo": {  // pedaços de um arquivo para o celular: só repassa (sem gravar nada a cada pedaço)
+        const { para, ...resto } = msg;
+        this.paraCelulares(resto, para || null);
+        return;
+      }
       case "ola":
         pc.ligado_desde = msg.ligado_desde || null;
         pc.info = msg.info || {};
@@ -296,7 +301,8 @@ export class Rele extends DurableObject {
     if (!tokens[quem.hash]) { try { ws.close(4001, "não autorizado"); } catch {} return; }
 
     if (msg.tipo === "estado") return ws.send(JSON.stringify({ tipo: "estado", ...(await this.estado()) }));
-    if (!["pedido", "tela", "cancelar", "parar_tudo", "privado", "tarefas", "cancelar_tarefa"].includes(msg.tipo)) return;
+    if (!["pedido", "tela", "cancelar", "parar_tudo", "privado", "tarefas", "cancelar_tarefa",
+          "arquivo_recebido"].includes(msg.tipo)) return;
     // limite de tamanho (áudio de até ~1 minuto)
     if (JSON.stringify(msg).length > 900_000) {
       return ws.send(JSON.stringify({ tipo: "erro", id: msg.id, texto: "Mensagem grande demais." }));

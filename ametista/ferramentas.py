@@ -525,9 +525,10 @@ FUNCOES["lembrar_fato"] = _lembrar_fato
 FUNCOES["esquecer_fato"] = memoria.esquecer_fato
 
 # Módulos extras
-from . import agenda, agente, arquivos, controle, identidade, pc, rotinas, spotify, steam  # noqa: E402
+from . import (agenda, agente, arquivos, arquivos_io, controle, envio, foco, identidade, notas, pc,  # noqa: E402
+               rotinas, sistema, spotify, steam)
 
-_SEMPRE = (pc, controle, identidade, steam, arquivos, rotinas, agente)
+_SEMPRE = (pc, controle, identidade, steam, arquivos, rotinas, agente, arquivos_io, notas, sistema, envio, foco)
 for _m in _SEMPRE:
     DEFINICOES += _m.DEFINICOES
     FUNCOES.update(_m.FUNCOES)
@@ -549,6 +550,10 @@ def _disponivel(nome: str) -> bool:
         return casa_configurada()
     if nome.startswith("steam_"):
         return steam.disponivel()
+    if nome == "arquivo_enviar_celular":
+        from . import nuvem
+
+        return nuvem.configurada()
     return True
 
 

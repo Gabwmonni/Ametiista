@@ -89,14 +89,30 @@ RISCO = {
 # parâmetro que a função recebe quando a pessoa confirmou (a IA não vê esses parâmetros)
 ARG_CONFIRMACAO = {"pc_sistema": "confirmado", "steam_instalar": "confirmado_reiniciar"}
 
+# Módulos novos declaram aqui, junto da ferramenta, o risco, a pergunta de confirmação, a descrição legível e
+# como desfazer (em vez de espalhar casos especiais por este arquivo).
+EXTENSOES: dict[str, dict] = {}
+
+
+def registrar_ferramenta(nome: str, *, risco=LIVRE, pergunta=None, descrever=None, preparar=None, desfazer=None,
+                         leitura: bool = False) -> None:
+    """risco: nível ou função(args) -> nível; pergunta/descrever: função(args) -> texto; preparar: função(args)
+    -> estado de antes (ou None se não dá para desfazer); desfazer: função(args, antes, resultado) -> texto;
+    leitura: só consulta (não entra no registro de ações)."""
+    EXTENSOES[nome] = {"risco": risco, "pergunta": pergunta, "descrever": descrever, "preparar": preparar,
+                       "desfazer": desfazer, "leitura": leitura}
+
 
 def risco(nome: str, args: dict) -> str:
-    r = RISCO.get(nome, LIVRE)
+    r = EXTENSOES[nome]["risco"] if nome in EXTENSOES else RISCO.get(nome, LIVRE)
     return r(args) if callable(r) else r
 
 
 def pergunta_padrao(nome: str, args: dict) -> str:
     """Pergunta usada quando não há IA no meio (rotinas, comandos locais)."""
+    ext = EXTENSOES.get(nome)
+    if ext and ext["pergunta"]:
+        return ext["pergunta"](args)
     if nome == "pc_sistema":
         verbo = {"desligar": "desligar", "reiniciar": "reiniciar", "suspender": "suspender"}.get(args.get("acao"), "")
         return f"Posso {verbo} o PC?"
@@ -124,6 +140,12 @@ def pergunta_padrao(nome: str, args: dict) -> str:
 
 # ====================================================================== descrição legível
 def descrever(nome: str, a: dict) -> str:
+    ext = EXTENSOES.get(nome)
+    if ext and ext["descrever"]:
+        try:
+            return ext["descrever"](a)
+        except Exception:
+            return nome
     g = a.get
     d = {
         "pc_volume": lambda: {"mudo": "Mutou o som do PC", "som": "Voltou o som do PC"}.get(
@@ -183,6 +205,9 @@ def _id_lembrete(resultado: str) -> str | None:
 def _preparar_desfazer(nome: str, a: dict) -> dict | None:
     """Guarda o estado de antes, para poder desfazer depois."""
     try:
+        ext = EXTENSOES.get(nome)
+        if ext:
+            return ext["preparar"](a) if ext["preparar"] else None
         if nome == "pc_volume":
             from . import pc
 
@@ -229,6 +254,9 @@ def _executar_desfazer(item: dict) -> str:
     nome, a = item["ferramenta"], item["args"]
     ctx = item.get("antes") or {}
     res = item.get("resultado") or ""
+    ext = EXTENSOES.get(nome)
+    if ext and ext["desfazer"]:
+        return ext["desfazer"](a, ctx, res)
     if nome == "pc_volume" and ctx.get("volume") is not None:
         from . import pc
 
@@ -326,6 +354,8 @@ DESFAZIVEIS = {"pc_volume", "spotify_volume", "criar_timer", "criar_lembrete", "
 
 
 def _desfazivel(nome: str, a: dict, antes: dict | None, ok: bool) -> bool:
+    if nome in EXTENSOES:
+        return ok and bool(EXTENSOES[nome]["desfazer"]) and antes is not None
     if not ok or nome not in DESFAZIVEIS:
         return False
     if nome == "pc_sistema":
@@ -530,7 +560,7 @@ def executar(nome: str, args: dict, funcao, *, falante=None, origem: str = "pc",
                     "pc_status", "clima", "noticias", "agenda_listar", "spotify_tocando", "pessoas_listar",
                     "steam_buscar_jogo", "steam_unidades", "steam_status", "rotina_listar", "casa_listar",
                     "spotify_aparelhos", "acoes_listar", "diagnostico", "tarefas_listar", "caderno_listar") \
-            and (ok or registrar_falha):
+            and not EXTENSOES.get(nome, {}).get("leitura") and (ok or registrar_falha):
         registrar(nome, args, resultado, ok, antes, quem=getattr(falante, "nome", "") or "",
                   origem=origem, motivo=motivo, grupo=grupo, grupo_proprio=grupo_proprio, troca=troca)
     return resultado

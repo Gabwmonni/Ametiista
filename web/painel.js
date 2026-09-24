@@ -93,6 +93,7 @@
     "Ouvido": "Microfone, palavra de ativação, conversa contínua e interrupção por voz.",
     "Pessoas": "Quem pode falar com ela e o que cada pessoa pode fazer.",
     "Proatividade": "Quando ela pode puxar assunto sozinha.",
+    "Foco": "Sessões de estudo: ela percebe quando você troca o estudo por distração e chama você de volta.",
     "Memória": "O que ela guarda e como procura.",
     "Agenda": "Google Agenda, Outlook e avisos.",
     "Contas": "Spotify e Steam.",

@@ -59,6 +59,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .msg.notif { align-self: stretch; max-width: none; background: #1e1433; border: 1px solid #3a2a5a; font-size: 14px; }
 .msg img { width: 100%; border-radius: 12px; display: block; margin-top: 4px; }
 .msg .quando { display: block; font-size: 11px; color: var(--fraco); margin-top: 3px; }
+.arquivo-acoes { display: flex; gap: 8px; margin-top: 8px; }
+.arquivo-acoes a { flex: 1; text-align: center; padding: 7px 10px; border-radius: 12px; text-decoration: none;
+  color: var(--texto); background: var(--ametista-2); font-weight: 600; font-size: 14px; }
 .digitando { display: inline-flex; gap: 4px; }
 .digitando i { width: 6px; height: 6px; border-radius: 50%; background: var(--fraco); animation: pula 1s infinite; }
 .digitando i:nth-child(2) { animation-delay: .15s; } .digitando i:nth-child(3) { animation-delay: .3s; }

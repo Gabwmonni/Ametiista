@@ -193,7 +193,42 @@
       case "notificacao":
         mostrarNotificacao(m, false);
         break;
+      case "arquivo":
+        receberArquivo(m);
+        break;
     }
+  }
+
+  // ---------------------------------------------------------------- arquivos que o PC manda
+  const recebendo = new Map();   // id -> pedaços que já chegaram
+  const urlsArquivos = [];
+  const tamanhoLegivel = (n) => n >= 1048576 ? `${(n / 1048576).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+  function receberArquivo(m) {
+    let r = recebendo.get(m.id);
+    if (!r) {
+      r = { partes: new Array(m.total), chegaram: 0, bolha: adicionar("ela", "📎 Recebendo " + m.nome + "…") };
+      recebendo.set(m.id, r);
+    }
+    if (r.partes[m.parte] === undefined) { r.partes[m.parte] = m.dados; r.chegaram++; }
+    r.bolha.firstChild.textContent = `📎 Recebendo ${m.nome}… ${Math.round(100 * r.chegaram / m.total)}%`;
+    if (r.chegaram < m.total) return;
+    recebendo.delete(m.id);
+    const blob = new Blob(r.partes.map((b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))),
+                          { type: m.mime || "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    urlsArquivos.push(url);
+    while (urlsArquivos.length > 12) URL.revokeObjectURL(urlsArquivos.shift());
+    r.bolha.textContent = `📎 ${m.nome} (${tamanhoLegivel(blob.size)})`;
+    if ((m.mime || "").startsWith("image/")) {
+      const img = document.createElement("img"); img.src = url; img.alt = m.nome; r.bolha.appendChild(img);
+    }
+    const acoes = document.createElement("div"); acoes.className = "arquivo-acoes";
+    const abrir = document.createElement("a"); abrir.href = url; abrir.target = "_blank"; abrir.rel = "noopener";
+    abrir.textContent = "Abrir";
+    const baixar = document.createElement("a"); baixar.href = url; baixar.download = m.nome; baixar.textContent = "Baixar";
+    acoes.append(abrir, baixar); r.bolha.appendChild(acoes);
+    $("conversa").scrollTop = $("conversa").scrollHeight;
+    enviar({ tipo: "arquivo_recebido", arquivo: m.id });
   }
 
   function mostrarNotificacao(n, antiga) {

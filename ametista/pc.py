@@ -286,10 +286,10 @@ def status() -> str:
 
 
 # ================================================================== tela e texto
-def janela_ativa() -> tuple[str, str]:
-    """(título, programa) da janela em foco."""
+def janela_ativa_info(caminho: bool = False) -> tuple[str, str, str]:
+    """(título, programa, caminho do .exe) da janela em foco. O caminho só é lido se pedido."""
     if not WINDOWS:
-        return "", ""
+        return "", "", ""
     try:
         import ctypes
         import ctypes.wintypes
@@ -303,9 +303,22 @@ def janela_ativa() -> tuple[str, str]:
         user32.GetWindowTextW(hwnd, buf, n + 1)
         pid = ctypes.wintypes.DWORD()
         user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-        return buf.value, psutil.Process(pid.value).name()
+        proc = psutil.Process(pid.value)
+        exe = ""
+        if caminho:
+            try:
+                exe = proc.exe()
+            except Exception:
+                exe = ""
+        return buf.value, proc.name(), exe
     except Exception:
-        return "", ""
+        return "", "", ""
+
+
+def janela_ativa() -> tuple[str, str]:
+    """(título, programa) da janela em foco."""
+    titulo, prog, _ = janela_ativa_info()
+    return titulo, prog
 
 
 def janela_ativa_texto() -> str:

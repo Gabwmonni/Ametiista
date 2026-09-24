@@ -166,6 +166,21 @@ CAMPOS: list[Campo] = [
     Campo("PAUSA_MINUTOS", "120", "Proatividade", "Sugerir pausa depois de quantos minutos no PC",
           tipo="numero", conversor=_int(120), ajuda="0 desliga."),
 
+    # ------------------------------------------------------------------ Foco
+    Campo("FOCO_HORARIOS", "", "Foco", "Horários de estudo",
+          ajuda="Nesses horários a sessão de foco começa sozinha. Ex.: seg-sex 19:00-22:00; sab 09:00-12:00. "
+                "Vazio = só quando você pedir (\"vou estudar cálculo por uma hora\")."),
+    Campo("FOCO_TOLERANCIA_MIN", "3", "Foco", "Minutos seguidos de distração antes de ela chamar você",
+          tipo="numero", conversor=_float(3)),
+    Campo("FOCO_PERCEBER", "1", "Foco", "Perceber sozinha fora das sessões", tipo="bool", conversor=_bool,
+          ajuda="Se você estava estudando e caiu numa distração por 15 minutos, ela comenta (no máximo uma vez "
+                "por hora, seguindo a Proatividade)."),
+    Campo("FOCO_ESTUDO", "", "Foco", "Também conta como estudo",
+          ajuda="Palavras do título da janela, separadas por ponto e vírgula. Ex.: moodle da facul; projeto final"),
+    Campo("FOCO_DISTRACOES", "", "Foco", "Também conta como distração",
+          ajuda="Palavras do título ou programas. Ex.: uol; ge.globo; clashroyale.exe. YouTube (fora de aulas), "
+                "redes sociais, streaming e jogos já entram."),
+
     # ------------------------------------------------------------------ Memória
     Campo("GUARDAR_CONVERSAS", "1", "Memória", "Guardar o histórico das conversas", tipo="bool",
           conversor=_bool, ajuda="Permite perguntar \"o que eu te pedi ontem?\"."),

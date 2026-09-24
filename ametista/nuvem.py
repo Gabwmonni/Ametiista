@@ -71,9 +71,12 @@ class Nuvem:
                                 continue
                             if msg.get("tipo") in ("rele", "celulares", "status_agora"):   # quem está olhando
                                 self.rele_novo = True
+                                antes = self.celulares
                                 self.celulares = int(msg.get("celulares", self.celulares) or 0)
                                 if self.celulares:          # alguém abriu o app: status fresco agora
                                     self._pedir_status.set()
+                                if self.celulares > antes:  # e os arquivos que estavam esperando
+                                    threading.Thread(target=self._entregar_fila, daemon=True).start()
                                 continue
                             threading.Thread(target=self._tratar, args=(msg,), daemon=True).start()
                     finally:
@@ -158,6 +161,15 @@ class Nuvem:
                 pass
         return info
 
+    @staticmethod
+    def _entregar_fila() -> None:
+        from . import envio
+
+        try:
+            envio.entregar_fila()
+        except Exception as e:
+            print(f"[nuvem] não consegui entregar os arquivos: {e}")
+
     # ------------------------------------------------------------ pedidos do celular
     def _tratar(self, msg: dict) -> None:
         tipo, para, pid = msg.get("tipo"), msg.get("de"), msg.get("id")
@@ -184,6 +196,10 @@ class Nuvem:
                 from . import agente
 
                 agente.cancelar(str(msg.get("tarefa", "")))
+            elif tipo == "arquivo_recebido":
+                from . import envio
+
+                envio.confirmar(str(msg.get("arquivo", "")))
             elif tipo == "celular_pareado":
                 eventos.publicar({"tipo": "aviso", "texto": f"Celular conectado: {msg.get('nome', '')}."})
         except Exception as e:
@@ -205,7 +221,8 @@ class Nuvem:
                 return
         eventos.publicar({"tipo": "aviso_celular", "texto": texto, "interno": True})
         # O celular pareado é do dono: atende com permissão total
-        r = nucleo.atender(texto, DONO_PADRAO, origem="celular", com_voz=msg.get("voz", True) is not False)
+        r = nucleo.atender(texto, DONO_PADRAO, origem="celular", com_voz=msg.get("voz", True) is not False,
+                           celular=para)
         if r.get("cancelado"):
             self.enviar({"tipo": "erro", "para": para, "id": pid, "texto": "Pedido cancelado."})
             return

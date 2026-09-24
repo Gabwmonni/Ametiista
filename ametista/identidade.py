@@ -32,6 +32,11 @@ PROIBIDAS_FAMILIA = {
     "memoria_buscar", "memoria_apagar_conversas", "caderno_guardar", "caderno_buscar", "caderno_listar",
     "caderno_apagar", "arquivos_buscar", "arquivo_abrir", "arquivo_mostrar_na_pasta", "agente_iniciar",
     "tarefa_cancelar", "acoes_listar", "desfazer_acao", "modo_privado", "rotina_criar", "rotina_apagar",
+    # arquivos, notas e o PC por dentro são só do dono
+    "arquivo_ler", "arquivo_escrever", "pasta_listar", "arquivo_mover", "arquivo_copiar", "arquivo_apagar",
+    "arquivo_enviar_celular", "nota_criar", "nota_acrescentar", "nota_ler", "notas_listar", "nota_abrir",
+    "conversa_exportar", "pc_processos", "pc_encerrar", "limpeza_executar", "foco_iniciar", "foco_parar",
+    "foco_pausar", "foco_relatorio",
 }
 PERMITIDAS_VISITANTE = {
     "clima", "noticias", "criar_timer", "web_search", "pc_midia", "pc_volume",
