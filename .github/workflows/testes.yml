@@ -133,7 +133,7 @@ jobs:
       - name: Descompactar a 2.0 dentro de um OneDrive, num caminho longo
         shell: pwsh
         run: |
-          git archive --format=zip -o "$env:RUNNER_TEMP\v2.zip" HEAD
+          git archive --format=zip --prefix=ametista/ -o "$env:RUNNER_TEMP\v2.zip" HEAD   # igual ao zip entregue
           $pasta = "$env:USERPROFILE\OneDrive - Etec Centro Paula Souza\Documents\projeto-ametista-v2.0"
           Expand-Archive "$env:RUNNER_TEMP\v2.zip" -DestinationPath $pasta
           "PASTA_LONGA=$pasta\ametista" >> $env:GITHUB_ENV
