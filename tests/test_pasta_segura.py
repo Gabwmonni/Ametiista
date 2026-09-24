@@ -130,3 +130,103 @@ def test_fora_do_windows_nao_procura_instalacao_anterior(tmp_path):
 
     if sys.platform != "win32":
         assert ps.instalacao_anterior(tmp_path) is None
+
+
+# ---------------------------------------------------------------- fechar a Ametista aberta antes de atualizar
+NETSTAT_EN = """
+Active Connections
+
+  Proto  Local Address          Foreign Address        State           PID
+  TCP    0.0.0.0:135            0.0.0.0:0              LISTENING       1044
+  TCP    127.0.0.1:8765         0.0.0.0:0              LISTENING       7312
+  TCP    127.0.0.1:8765         127.0.0.1:52011        ESTABLISHED     7312
+  TCP    127.0.0.1:52011        127.0.0.1:8765         ESTABLISHED     9001
+"""
+NETSTAT_PT = """
+Conexões ativas
+
+  Proto  Endereço local         Endereço externo       Estado          PID
+  TCP    127.0.0.1:52011        127.0.0.1:8765         ESTABELECIDA    9001
+  TCP    127.0.0.1:8765         0.0.0.0:0              ESCUTANDO       4420
+  TCP    [::]:8766              [::]:0                 ESCUTANDO       5150
+"""
+
+
+def test_acha_o_processo_da_porta_no_netstat_em_ingles_e_em_portugues():
+    assert ps.pid_na_porta(NETSTAT_EN) == 7312
+    assert ps.pid_na_porta(NETSTAT_PT) == 4420                  # o estado muda com o idioma: não depende dele
+    assert ps.pid_na_porta(NETSTAT_PT, 8766) == 5150
+    assert ps.pid_na_porta(NETSTAT_EN, 9999) is None and ps.pid_na_porta("") is None
+
+
+def _servidor(rotas):
+    import http.server
+    import threading
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            corpo = rotas.get(self.path)
+            self.send_response(200 if corpo is not None else 404)
+            self.end_headers()
+            self.wfile.write((corpo or "não").encode())
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
+
+
+def test_reconhece_a_ametista_2_e_a_1_e_nao_confunde_com_outro_programa():
+    for rotas, esperado in (({"/api/saude": '{"ok": true, "versao": "2.0", "inicio": 1}'}, "2.0"),
+                            ({"/": "<title>Ametista</title>"}, "?"),                    # a 1.0 não tem /api/saude
+                            ({"/": "<title>Outro servidor</title>"}, None)):
+        srv = _servidor(rotas)
+        try:
+            assert ps.versao_aberta(srv.server_port) == esperado
+        finally:
+            srv.shutdown()
+
+
+def test_outro_programa_na_porta_nao_e_fechado(monkeypatch, capsys):
+    srv = _servidor({"/": "outro"})
+    monkeypatch.setattr(ps, "_ametista_aberta", lambda porta=8765: True)
+    mortos = []
+    monkeypatch.setattr(ps.subprocess, "run", lambda *a, **k: mortos.append(a))
+    try:
+        assert ps.fechar_ametista(srv.server_port) is False
+    finally:
+        srv.shutdown()
+    assert mortos == [] and "outro programa" in capsys.readouterr().out
+
+
+def test_fecha_a_ametista_aberta_pelo_processo_da_porta(monkeypatch, capsys):
+    aberta = {"sim": True}
+    monkeypatch.setattr(ps, "_ametista_aberta", lambda porta=8765: aberta["sim"])
+    monkeypatch.setattr(ps, "versao_aberta", lambda porta=8765: "2.0")
+    monkeypatch.setattr(ps.sys, "platform", "win32")
+    comandos = []
+
+    class Feito:
+        stdout = NETSTAT_PT
+
+    def rodar(cmd, **k):
+        comandos.append(cmd)
+        if cmd[0] == "taskkill":
+            aberta["sim"] = False
+        return Feito()
+
+    monkeypatch.setattr(ps.subprocess, "run", rodar)
+    assert ps.fechar_ametista() is True
+    assert comandos == [["netstat", "-ano", "-p", "TCP"], ["taskkill", "/PID", "4420", "/T", "/F"]]
+    assert "abre de novo, já na versão nova" in capsys.readouterr().out
+
+
+def test_instalar_fecha_nas_portas_do_env_desta_pasta(monkeypatch, tmp_path):
+    (tmp_path / ".env").write_text('# x\nPORTA="9123"\n', encoding="utf-8")
+    assert ps.porta_do_env(tmp_path) == 9123 and ps.porta_do_env(tmp_path / "nada") is None
+    portas = []
+    monkeypatch.setattr(ps, "fechar_ametista", lambda porta=8765: portas.append(porta))
+    ps.main(["x", str(tmp_path)])
+    assert portas == [8765, 9123]

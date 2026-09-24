@@ -73,3 +73,25 @@ def test_env_example_acompanha_o_esquema():
     for c in config.CAMPOS:
         if not c.oculto:
             assert valores[c.chave] == c.padrao, c.chave
+
+
+def test_quem_atualiza_com_a_velocidade_antiga_ganha_a_voz_calma(env_limpo):
+    env_limpo.write_text("# minhas notas\nAMETISTA_VOZ=pt-BR-FranciscaNeural\nVOZ_VELOCIDADE=+5%\n", encoding="utf-8")
+    config.recarregar()
+    assert config.migrar_env() == ["VOZ_VELOCIDADE"]
+    texto = env_limpo.read_text(encoding="utf-8")
+    assert texto.startswith(f"# versão das configurações: {config.VERSAO_CONFIG}\n") and "# minhas notas" in texto
+    assert config.VOZ_VELOCIDADE == "-4%"
+    assert config.migrar_env() == []                         # só uma vez
+    config.salvar({"VOZ_VELOCIDADE": "+5%"})                 # quem escolher +5% depois fica com +5%
+    assert config.migrar_env() == [] and config.VOZ_VELOCIDADE == "+5%"
+    assert env_limpo.read_text(encoding="utf-8").count("# versão das configurações") == 1
+
+
+def test_migracao_nao_mexe_no_que_a_pessoa_escolheu(env_limpo):
+    env_limpo.write_text("VOZ_VELOCIDADE=+15%\nCIDADE=Jundiaí\n", encoding="utf-8")
+    config.recarregar()
+    assert config.migrar_env() == []
+    assert config.VOZ_VELOCIDADE == "+15%" and config.CIDADE == "Jundiaí"
+    env_limpo.write_text(config.texto_exemplo(), encoding="utf-8")     # instalação nova: já nasce na versão atual
+    assert config.migrar_env() == []

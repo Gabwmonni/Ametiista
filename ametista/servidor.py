@@ -13,6 +13,7 @@ import base64
 import io
 import secrets
 import threading
+import time
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 
@@ -149,9 +150,12 @@ async def painel():
 
 
 # ====================================================================== estado geral
+INICIO = time.time()          # quando esta Ametista abriu (o instalador confere que é a nova que respondeu)
+
+
 @app.get("/api/saude")
 async def saude():
-    return {"ok": True, "versao": __version__}
+    return {"ok": True, "versao": __version__, "inicio": INICIO}
 
 
 @app.get("/api/chamar")

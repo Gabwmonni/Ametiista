@@ -12,7 +12,11 @@
   let aguardando = new Map();   // id do pedido -> elemento "digitando…"
   let reconectar = 1000;
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  if ("serviceWorker" in navigator) {
+    const jaTinha = !!navigator.serviceWorker.controller;   // chegou versão nova do app: recarrega uma vez para usá-la
+    navigator.serviceWorker.addEventListener("controllerchange", () => { if (jaTinha) location.reload(); });
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }
 
   function lerToken() { try { return localStorage.getItem(CHAVE_TOKEN); } catch { return null; } }
   function lerVoz() { try { return localStorage.getItem(CHAVE_VOZ) !== "0"; } catch { return true; } }

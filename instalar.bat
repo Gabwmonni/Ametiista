@@ -38,17 +38,17 @@ if exist .venv\Scripts\python.exe (
   )
 )
 if not exist .venv\Scripts\python.exe (
-  echo  [1/5] Criando o ambiente Python...
+  echo  [1/6] Criando o ambiente Python...
   %PY% -m venv .venv || (pause & exit /b 1)
 ) else (
-  echo  [1/5] Ambiente Python ja existe: atualizando.
+  echo  [1/6] Ambiente Python ja existe: atualizando.
 )
 call .venv\Scripts\activate.bat
 
 rem --- apaga o codigo compilado da versao anterior (evita rodar pedaco velho depois de atualizar)
 for /d /r "ametista" %%d in (__pycache__) do @if exist "%%d" rd /s /q "%%d"
 
-echo  [2/5] Instalando bibliotecas - pode levar alguns minutos...
+echo  [2/6] Instalando bibliotecas - pode levar alguns minutos...
 python -m pip install --upgrade pip -q
 python -m pip install -r requirements.txt -q || (
   echo.
@@ -57,7 +57,7 @@ python -m pip install -r requirements.txt -q || (
   exit /b 1
 )
 
-echo  [3/5] Busca por significado na memoria - opcional...
+echo  [3/6] Busca por significado na memoria - opcional...
 python -m pip install "fastembed>=0.4" -q || echo  Nao instalou; tudo funciona, a memoria usa busca por palavras.
 
 if not exist .env (
@@ -65,24 +65,30 @@ if not exist .env (
   set "NOVO=1"
 )
 
-echo  [4/5] Baixando os modelos offline: ouvir, reconhecer quem fala, transcrever e memoria...
+echo  [4/6] Baixando os modelos offline: ouvir, reconhecer quem fala, transcrever e memoria...
 python -m ametista.baixar_modelos || (pause & exit /b 1)
 
-echo  [5/5] Ligando "Iniciar com o Windows"...
+echo  [5/6] Ligando "Iniciar com o Windows"...
 python -m ametista --autoinicio on
 
+echo  [6/6] App do celular - se ja estava publicado, publica a versao nova...
+python -m ametista.publicar_celular --so-atualizar
+
+rem --- abre a Ametista ja na versao nova (a que estava aberta foi fechada no comeco da instalacao)
+echo.
+if not defined AMETISTA_NAO_ABRIR python -m ametista --abrir
 echo.
 echo  Pronto!
-echo   1. De dois cliques em iniciar.bat.
 if defined NOVO (
-  echo   2. O painel de configuracoes vai abrir no navegador: cole a chave da Anthropic
+  echo   1. O painel de configuracoes abre no navegador: cole a chave da Anthropic
   echo      em Cerebro e clique em Salvar.
 ) else (
-  echo   2. Suas configuracoes, memoria e vozes cadastradas continuam as mesmas.
+  echo   1. Suas configuracoes, memoria e vozes cadastradas continuam as mesmas.
   echo      As novidades da 2.0 estao no painel: botao direito no icone da Ametista.
 )
-echo   3. Cadastre a sua voz: botao direito no icone da Ametista ^> Vozes ^> Cadastrar a minha voz.
-echo   4. Algo estranho? De dois cliques em diagnostico.bat.
+echo   2. Cadastre a sua voz: botao direito no icone da Ametista ^> Vozes ^> Cadastrar a minha voz.
+echo   3. Algo estranho? De dois cliques em diagnostico.bat.
+echo   Ela liga sozinha com o Windows. Para abrir de novo na mao: iniciar.bat.
 echo   O resto - celular, agenda, Spotify, casa, voz clonada - esta no LEIA-ME.
 if defined AMETISTA_PASTA_ANTIGA echo.
 if defined AMETISTA_PASTA_ANTIGA echo   A Ametista agora fica em "%CD%".

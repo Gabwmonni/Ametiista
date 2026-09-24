@@ -2,6 +2,10 @@
 
 Uso: python -m ametista.publicar_celular   (ou dois cliques em publicar_celular.bat)
 Precisa do Node.js instalado (nodejs.org). Na primeira vez, o navegador abre para você entrar na Cloudflare.
+
+    python -m ametista.publicar_celular --so-atualizar
+Usado pelo instalar.bat: se o app já estava publicado, publica a versão nova sem perguntar nada (não abre o
+navegador, não mexe na chave) e nunca faz a instalação falhar.
 """
 import hashlib
 import re
@@ -80,5 +84,36 @@ def main() -> None:
     print("Reinicie a Ametista e use 💎 > Parear celular.")
 
 
+def _quieto(cmd: str, limite: int) -> tuple[int, str]:
+    try:
+        p = subprocess.run(cmd, cwd=PASTA, shell=True, capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=limite, stdin=subprocess.DEVNULL)
+        return p.returncode, (p.stdout or "") + (p.stderr or "")
+    except subprocess.TimeoutExpired:
+        return 1, "demorou demais"
+
+
+def atualizar_publicado() -> str:
+    """Publica a versão nova do app, se ele já estava publicado. Devolve o que aconteceu, em português."""
+    if not config.NUVEM_URL or not config.NUVEM_CHAVE:
+        return "App do celular: não publicado (opcional, veja o LEIA-ME)."
+    if not shutil.which("npx"):
+        return "App do celular: para atualizar, instale o Node.js (nodejs.org) e rode o publicar_celular.bat."
+    codigo, saida = _quieto("npm install --no-audit --no-fund", 600)
+    if codigo != 0:
+        return "App do celular: não consegui atualizar agora (sem internet?). Rode o publicar_celular.bat depois."
+    codigo, saida = _quieto("npx wrangler whoami", 120)
+    if codigo != 0 or "not authenticated" in saida.lower():
+        return "App do celular: para atualizar, rode o publicar_celular.bat (ele pede para entrar na Cloudflare)."
+    atualizar_sw()
+    codigo, saida = _quieto("npx wrangler deploy", 600)
+    if codigo != 0:
+        return "App do celular: a publicação falhou. Rode o publicar_celular.bat para ver o motivo."
+    return "App do celular: versão nova publicada. No celular, é só abrir o app (ele se atualiza sozinho)."
+
+
 if __name__ == "__main__":
-    main()
+    if "--so-atualizar" in sys.argv:
+        print(" " + atualizar_publicado())
+    else:
+        main()

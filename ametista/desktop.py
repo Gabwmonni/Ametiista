@@ -433,6 +433,13 @@ def main() -> int:
             pass
         return 0
 
+    try:
+        mudou = config.migrar_env()           # padrões novos para quem atualizou (ex.: voz mais calma)
+        if mudou:
+            print(f"[config] atualizadas para o padrão novo: {', '.join(mudou)}")
+    except OSError as e:
+        print(f"[config] não consegui atualizar o .env: {e}")
+
     QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)

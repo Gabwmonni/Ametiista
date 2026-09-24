@@ -36,12 +36,17 @@ jobs:
         run: python tests/checar_desktop.py
 
   instalador:
-    # Roda o instalar.bat de verdade, como o usuário roda (com Enter no "pause" final)
+    # Roda o instalar.bat de verdade, como o usuário roda (com Enter no "pause" final). No fim ele abre a Ametista;
+    # instalar de novo com ela aberta tem que fechar a antiga e abrir a nova (senão a atualização não aparece).
     runs-on: windows-latest
     timeout-minutes: 40
     env:
       PYTHONUTF8: "1"
       WHISPER_MODELO: tiny          # só para o teste baixar mais rápido; o padrão continua "small"
+      QT_QPA_PLATFORM: offscreen    # a Ametista aberta pelo instalador roda sem tela no GitHub
+      QTWEBENGINE_CHROMIUM_FLAGS: "--disable-gpu --no-sandbox"
+      AMETISTA_SEM_PAINEL: "1"
+      OUVIDO_LIGADO: "0"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -63,9 +68,18 @@ jobs:
         run: |
           echo.| diagnostico.bat
           type dados\diagnostico.txt
-      - name: Instalar de novo (atualização) não quebra nada
+      - name: Ela abriu sozinha no fim da instalação
+        shell: cmd
+        run: .venv\Scripts\python.exe -c "import httpx, sys; r = httpx.get('http://127.0.0.1:8765/api/saude', timeout=10).json(); print(r); open('inicio1.txt', 'w').write(str(r['inicio'])); sys.exit(r['versao'] != '2.0')"
+      - name: Instalar de novo (atualização) com ela aberta não quebra nada
         shell: cmd
         run: echo.| instalar.bat
+      - name: A antiga foi fechada e a nova abriu
+        shell: cmd
+        run: .venv\Scripts\python.exe -c "import httpx, sys; r = httpx.get('http://127.0.0.1:8765/api/saude', timeout=10).json(); antes = float(open('inicio1.txt').read()); print(r, antes); sys.exit(not r['inicio'] > antes)"
+      - name: Fechar pelo processo da porta (netstat + taskkill de verdade)
+        shell: cmd
+        run: .venv\Scripts\python.exe -c "from ametista import pasta_segura as p; import sys; ok = p.fechar_ametista(); print('fechou:', ok, 'ainda aberta:', p._ametista_aberta()); sys.exit(not ok or p._ametista_aberta())"
 
   atualizacao:
     # Atualização de verdade: instala a 1.0 com o instalar.bat dela, usa, copia a 2.0 por cima e roda o instalar.bat novo
@@ -74,6 +88,7 @@ jobs:
     env:
       PYTHONUTF8: "1"
       WHISPER_MODELO: tiny
+      AMETISTA_NAO_ABRIR: "1"       # o teste confere a memória logo depois: sem ela aberta ao mesmo tempo
     steps:
       - uses: actions/checkout@v5
         with:
@@ -114,6 +129,7 @@ jobs:
     env:
       PYTHONUTF8: "1"
       WHISPER_MODELO: tiny
+      AMETISTA_NAO_ABRIR: "1"
     steps:
       - uses: actions/checkout@v5
         with:

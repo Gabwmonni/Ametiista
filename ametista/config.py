@@ -276,9 +276,37 @@ def salvar(novos: dict[str, str]) -> list[str]:
     return reiniciar
 
 
+# Padrões que mudaram de uma versão para outra: quem atualiza e ainda está com o padrão antigo (nunca mexeu
+# nesse ajuste) passa para o novo. Roda uma vez por .env; a versão fica anotada num comentário.
+MIGRACOES = {
+    2: [("VOZ_VELOCIDADE", "+5%", "-4%")],     # voz mais calma e atenciosa
+}
+VERSAO_CONFIG = max(MIGRACOES)
+_MARCA = "# versão das configurações:"
+
+
+def migrar_env() -> list[str]:
+    """Aplica as MIGRACOES pendentes no .env. Devolve as chaves que mudaram."""
+    if not ARQUIVO_ENV.exists():
+        return []
+    texto = ARQUIVO_ENV.read_text(encoding="utf-8")
+    m = re.search(rf"^{_MARCA} *(\d+)", texto, re.M)
+    feita = int(m.group(1)) if m else 1
+    if feita >= VERSAO_CONFIG:
+        return []
+    atuais = _ler_env()
+    trocas = {chave: novo for v in sorted(MIGRACOES) if v > feita
+              for chave, antigo, novo in MIGRACOES[v] if atuais.get(chave) == antigo}
+    if trocas:
+        salvar(trocas)
+    texto = re.sub(rf"^{_MARCA}.*\n?", "", ARQUIVO_ENV.read_text(encoding="utf-8"), flags=re.M)
+    ARQUIVO_ENV.write_text(f"{_MARCA} {VERSAO_CONFIG}\n" + texto, encoding="utf-8")
+    return list(trocas)
+
+
 def texto_exemplo() -> str:
     """Conteúdo do .env.example, gerado a partir de CAMPOS (assim os dois nunca ficam diferentes)."""
-    linhas = ["# ===== Projeto Ametista - configurações =====",
+    linhas = [f"{_MARCA} {VERSAO_CONFIG}", "# ===== Projeto Ametista - configurações =====",
               "# Quase tudo aqui também muda pelo painel: botão direito no ícone da Ametista > Configurações.",
               "# Linhas começando com # são comentários. Chave vazia = usa o padrão.", ""]
     secao = None

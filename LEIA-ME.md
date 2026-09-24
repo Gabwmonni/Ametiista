@@ -50,20 +50,21 @@ Ela liga junto com o PC e fica quietinha no ícone 💎 perto do relógio.
 
 Se algo não funcionar: dois cliques em **`diagnostico.bat`** (confere cada peça e diz o que está errado). O `depurar.bat` abre a Ametista com a janela de mensagens, para ver erros. O histórico fica em `dados/ametista.log`.
 
-## 2. Atualizar da 1.0
+## 2. Atualizar (da 1.0 ou de uma 2.0 anterior)
 
 Nada do que ela aprendeu se perde: o `.env`, as vozes cadastradas, a memória e os modelos ficam onde estão.
 
-1. Feche a Ametista: botão direito no 💎 → **Sair**.
-2. Abra o zip da 2.0, entre na pasta `ametista` de dentro dele e copie **tudo o que está lá** para a pasta onde a 1.0 está (ex.: `C:\Ametista`), escolhendo **substituir** os arquivos.
-3. Dois cliques em **`instalar.bat`** (instala as bibliotecas novas e baixa o modelo da busca por significado).
-4. Dois cliques em **`iniciar.bat`**.
-5. Se você usa o app do celular: dois cliques em **`publicar_celular.bat`** para atualizar o app (mesma conta e mesmo endereço; os celulares pareados continuam pareados). Depois abra o app no celular e toque em **Ativar avisos**.
-
-**Descompactou a 2.0 numa pasta nova, em vez de por cima?** Tudo bem: o `instalar.bat` acha a 1.0 (pelo "Iniciar com o Windows") e pergunta se deve trazer a memória, as vozes cadastradas e as configurações de lá. Depois, a pasta da 1.0 pode ser apagada.
+1. Abra o zip novo, entre na pasta `ametista` de dentro dele e copie **tudo o que está lá** para a pasta onde a Ametista está (ex.: `C:\Ametista`), escolhendo **substituir** os arquivos. Descompactar em outra pasta (até no OneDrive) também serve: o instalador leva para o lugar certo.
+2. Dois cliques em **`instalar.bat`**. Ele faz tudo sozinho:
+   - **fecha a Ametista que estiver aberta** (senão a versão antiga continuaria rodando e você não veria nada de novo);
+   - instala as bibliotecas novas e traz a memória, as vozes e as configurações de uma instalação em outra pasta;
+   - se o app do celular já estava publicado, **publica a versão nova** (no celular, é só abrir o app: ele se atualiza sozinho);
+   - no fim, **abre a Ametista já na versão nova** e mostra "A Ametista 2.0 abriu".
 
 Na primeira vez, ela traz os fatos e lembretes da 1.0 para a memória nova (o arquivo antigo vira `dados/memoria_v1_migrada.json`).
-As configurações novas começam no padrão; confira no painel (botão direito no 💎 → **Configurações…**).
+As configurações novas começam no padrão, e ajustes que mudaram de padrão entre as versões (como a velocidade da voz, agora mais calma) passam para o novo se você nunca tinha mexido neles. Confira no painel (botão direito no 💎 → **Configurações…**).
+
+Para conferir se o celular está na versão nova: **Diagnóstico** no painel avisa quando o app publicado é de uma versão antiga.
 
 ---
 

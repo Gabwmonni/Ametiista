@@ -12,18 +12,25 @@ Por que existe:
 - Dentro do OneDrive, ele tentaria enviar uns 2 GB de bibliotecas e modelos para a nuvem, e a sincronização
   pode estragar o banco de memória.
 - Quem descompacta a versão nova numa pasta nova perderia memória, vozes e configurações da anterior.
+- Se a Ametista antiga continuasse aberta, a nova não abriria (só chamaria a antiga): ela é fechada aqui e o
+  instalar.bat abre a versão nova no fim.
 """
+import json
 import ntpath
 import os
 import shutil
 import socket
+import subprocess
 import sys
+import time
+import urllib.request
 from pathlib import Path
 
 LIMITE = 70                          # letras no caminho da pasta (175 + 70 fica com folga abaixo de 259)
 DADOS_USUARIO = ("dados", "modelos", "voz")
 NAO_COPIAR = {".venv", "__pycache__", "node_modules", ".wrangler", ".git", *DADOS_USUARIO}
 SEM_PERGUNTAR = "AMETISTA_INSTALAR_SEM_PERGUNTAR"   # instalação automática: responde "sim" a tudo
+PORTA = 8765
 
 
 def _texto_pasta(pasta: Path) -> str:
@@ -134,10 +141,38 @@ def mover(origem: Path, destino: Path) -> None:
     trazer_dados(origem, destino)
 
 
-def _ametista_aberta(porta: int = 8765) -> bool:
+def _ametista_aberta(porta: int = PORTA) -> bool:
     with socket.socket() as s:
         s.settimeout(0.3)
         return s.connect_ex(("127.0.0.1", porta)) == 0
+
+
+def versao_aberta(porta: int = PORTA) -> str | None:
+    """Se quem está na porta é a Ametista, a versão dela ("?" numa versão sem /api/saude, como a 1.0)."""
+    base = f"http://127.0.0.1:{porta}"
+    try:
+        with urllib.request.urlopen(base + "/api/saude", timeout=3) as r:
+            return str(json.loads(r.read().decode("utf-8")).get("versao") or "?")
+    except Exception:
+        pass
+    try:
+        with urllib.request.urlopen(base + "/", timeout=3) as r:
+            if "ametista" in r.read(50000).decode("utf-8", "replace").lower():
+                return "?"
+    except Exception:
+        pass
+    return None
+
+
+def pid_na_porta(saida_netstat: str, porta: int = PORTA) -> int | None:
+    """Do `netstat -ano -p TCP`, o processo que espera conexões na porta. O nome do estado muda com o idioma do
+    Windows ("LISTENING", "ESCUTANDO"...), então vale o endereço remoto vazio (0.0.0.0:0)."""
+    for linha in saida_netstat.splitlines():
+        p = linha.split()
+        if len(p) >= 5 and p[0].upper() == "TCP" and p[1].endswith(f":{porta}") and p[2] in ("0.0.0.0:0", "[::]:0") \
+                and p[-1].isdigit():
+            return int(p[-1])
+    return None
 
 
 def perguntar(texto: str) -> bool:
@@ -159,9 +194,57 @@ def _esperar_fechar() -> None:
             pass
 
 
+def fechar_ametista(porta: int = PORTA, esperar: float = 15.0) -> bool:
+    """Fecha a Ametista que estiver aberta, de qualquer pasta ou versão: senão a atualização não troca os arquivos
+    em uso e, no fim, abrir a nova só chamaria a antiga. Devolve True se ela estava aberta."""
+    if not _ametista_aberta(porta):
+        return False
+    versao = versao_aberta(porta)
+    if versao is None:
+        print(f" Aviso: outro programa está usando a porta {porta}. A Ametista não abre enquanto ele estiver aberto.")
+        return False
+    print(" A Ametista está aberta" + ("" if versao == "?" else f" (versão {versao})") + ": fechando para atualizar...")
+    pid = None
+    if sys.platform == "win32":
+        try:
+            saida = subprocess.run(["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True, errors="replace",
+                                   timeout=30).stdout
+            pid = pid_na_porta(saida, porta)
+        except (OSError, subprocess.SubprocessError):
+            pid = None
+    if pid and pid != os.getpid():
+        try:
+            subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    fim = time.time() + esperar
+    while _ametista_aberta(porta) and time.time() < fim:
+        time.sleep(0.3)
+    if _ametista_aberta(porta):
+        _esperar_fechar()                      # não deu para fechar sozinho: pede para a pessoa
+    else:
+        print(" Fechada. Ela abre de novo, já na versão nova, no fim da instalação.")
+    return True
+
+
+def porta_do_env(pasta: Path) -> int | None:
+    """A porta configurada no .env de uma pasta (PORTA=...), se houver."""
+    try:
+        for linha in (pasta / ".env").read_text(encoding="utf-8", errors="replace").splitlines():
+            chave, _, valor = linha.partition("=")
+            if chave.strip() == "PORTA" and valor.strip().strip('"').isdigit():
+                return int(valor.strip().strip('"'))
+    except OSError:
+        pass
+    return None
+
+
 def main(argv: list[str]) -> int:
     pasta = Path(argv[1] if len(argv) > 1 else os.getcwd()).resolve()
     arquivo_destino = Path(argv[2]) if len(argv) > 2 else None
+    anterior = instalacao_anterior(pasta)
+    for porta in dict.fromkeys(p for p in (PORTA, porta_do_env(pasta), anterior and porta_do_env(anterior)) if p):
+        fechar_ametista(porta)
 
     motivos = problemas(pasta)
     if motivos:
@@ -175,7 +258,6 @@ def main(argv: list[str]) -> int:
         if not perguntar(f" Copiar para {destino}? [S/N] "):
             print("\n Tudo bem. Mova a pasta para um lugar como C:\\Ametista e rode o instalar.bat de novo.")
             return 1
-        _esperar_fechar()
         try:
             mover(pasta, destino)
         except OSError as e:
@@ -187,11 +269,9 @@ def main(argv: list[str]) -> int:
         print(f" Copiado. Continuando a instalação em {destino}...\n")
         return 10
 
-    anterior = instalacao_anterior(pasta)
     if anterior:
         print(f"\n Achei outra Ametista instalada em {anterior}.")
         if perguntar(" Trazer a memória, as vozes cadastradas e as configurações de lá? [S/N] "):
-            _esperar_fechar()
             n = trazer_dados(anterior, pasta)
             print(f" Pronto: {n} arquivos trazidos. A pasta antiga não é mais usada e pode ser apagada depois.\n")
     return 0

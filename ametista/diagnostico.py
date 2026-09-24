@@ -161,11 +161,28 @@ def _casa() -> dict:
         return _item("Casa (Home Assistant)", ERRO, f"sem resposta ({type(e).__name__})")
 
 
+def versao_do_celular_publicada() -> bool | None:
+    """O app publicado na Cloudflare é o desta versão? (compara a impressão digital dos arquivos no sw.js)"""
+    import re
+
+    from .publicar_celular import impressao_casca
+
+    try:
+        sw = httpx.get(config.NUVEM_URL.rstrip("/") + "/sw.js", timeout=6).text
+    except Exception:
+        return None
+    m = re.search(r'ametista-casca-([0-9a-f]+)', sw)
+    return None if not m else m.group(1) == impressao_casca()
+
+
 def _celular() -> dict:
     from . import nuvem
 
     if not nuvem.configurada():
         return _item("App do celular", AVISO, "não publicado (opcional: publicar_celular.bat)")
+    if versao_do_celular_publicada() is False:
+        return _item("App do celular", AVISO, "publicado numa versão antiga: dê dois cliques em publicar_celular.bat "
+                                              "para o celular receber a nova")
     if FORA_DO_APP:
         return _item("App do celular", OK, f"publicado em {config.NUVEM_URL} (a conexão é conferida com a Ametista aberta)")
     n = nuvem.instancia()
