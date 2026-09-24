@@ -38,17 +38,17 @@ if exist .venv\Scripts\python.exe (
   )
 )
 if not exist .venv\Scripts\python.exe (
-  echo  [1/6] Criando o ambiente Python...
+  echo  [1/7] Criando o ambiente Python...
   %PY% -m venv .venv || (pause & exit /b 1)
 ) else (
-  echo  [1/6] Ambiente Python ja existe: atualizando.
+  echo  [1/7] Ambiente Python ja existe: atualizando.
 )
 call .venv\Scripts\activate.bat
 
 rem --- apaga o codigo compilado da versao anterior (evita rodar pedaco velho depois de atualizar)
 for /d /r "ametista" %%d in (__pycache__) do @if exist "%%d" rd /s /q "%%d"
 
-echo  [2/6] Instalando bibliotecas - pode levar alguns minutos...
+echo  [2/7] Instalando bibliotecas - pode levar alguns minutos...
 python -m pip install --upgrade pip -q
 python -m pip install -r requirements.txt -q || (
   echo.
@@ -57,7 +57,7 @@ python -m pip install -r requirements.txt -q || (
   exit /b 1
 )
 
-echo  [3/6] Busca por significado na memoria - opcional...
+echo  [3/7] Busca por significado na memoria - opcional...
 python -m pip install "fastembed>=0.4" -q || echo  Nao instalou; tudo funciona, a memoria usa busca por palavras.
 
 if not exist .env (
@@ -65,13 +65,16 @@ if not exist .env (
   set "NOVO=1"
 )
 
-echo  [4/6] Baixando os modelos offline: ouvir, reconhecer quem fala, transcrever e memoria...
+echo  [4/7] Baixando os modelos offline: ouvir, reconhecer quem fala, transcrever e memoria...
 python -m ametista.baixar_modelos || (pause & exit /b 1)
 
-echo  [5/6] Ligando "Iniciar com o Windows"...
+echo  [5/7] Ligando "Iniciar com o Windows"...
 python -m ametista --autoinicio on
 
-echo  [6/6] App do celular - se ja estava publicado, publica a versao nova...
+echo  [6/7] Cerebro no proprio PC (Ollama) - opcional...
+python -m ametista.cerebro_local --preparar
+
+echo  [7/7] App do celular - se ja estava publicado, publica a versao nova...
 python -m ametista.publicar_celular --so-atualizar
 
 rem --- abre a Ametista ja na versao nova (a que estava aberta foi fechada no comeco da instalacao)

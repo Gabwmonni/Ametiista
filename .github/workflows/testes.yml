@@ -35,6 +35,29 @@ jobs:
       - name: App de desktop sobe, responde e fala
         run: python tests/checar_desktop.py
 
+  ollama:
+    # O cérebro local com um Ollama de verdade (CPU, modelo pequeno): o formato das ferramentas tem que bater.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Instalar o Ollama e um modelo pequeno
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          curl -sf http://127.0.0.1:11434/api/tags || (nohup ollama serve > ollama.log 2>&1 &)
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:11434/api/tags && break; sleep 1; done
+          ollama pull qwen2.5:1.5b
+      - name: Dependências
+        run: pip install -r requirements.txt
+      - name: Cérebro local com ferramentas
+        run: python tests/checar_ollama.py qwen2.5:1.5b
+
   instalador:
     # Roda o instalar.bat de verdade, como o usuário roda (com Enter no "pause" final). No fim ele abre a Ametista;
     # instalar de novo com ela aberta tem que fechar a antiga e abrir a nova (senão a atualização não aparece).

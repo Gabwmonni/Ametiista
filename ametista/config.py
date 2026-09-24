@@ -96,8 +96,19 @@ CAMPOS: list[Campo] = [
           conversor=_bool, ajuda="Desligado: usa sempre o modelo do dia a dia."),
     Campo("AGENTE_MODELO", "claude-opus-5", "Cérebro", "Modelo do modo agente", tipo="opcao",
           opcoes=MODELOS_FORTES, ajuda="Faz tarefas grandes e controla o mouse e o teclado."),
-    Campo("OLLAMA_URL", "http://localhost:11434", "Cérebro", "Endereço do Ollama (IA local de reserva)"),
-    Campo("OLLAMA_MODELO", "qwen2.5:3b", "Cérebro", "Modelo do Ollama"),
+    Campo("CEREBRO_PRINCIPAL", "claude", "Cérebro", "Cérebro principal", tipo="opcao",
+          opcoes=(("claude", "Claude na nuvem, com o Ollama de reserva"),
+                  ("ollama", "Ollama no PC (o Claude só entra se o local falhar)")),
+          ajuda="Com o Ollama, as conversas não saem do computador. Com uma placa de vídeo boa, ele responde "
+                "rápido e usa as mesmas ferramentas (arquivos, notas, programas, foco...)."),
+    Campo("OLLAMA_URL", "http://localhost:11434", "Cérebro", "Endereço do Ollama (IA no próprio PC)"),
+    Campo("OLLAMA_MODELO", "qwen2.5:7b", "Cérebro", "Modelo do Ollama", tipo="opcao",
+          opcoes=(("qwen2.5:7b", "Qwen 2.5 7B (recomendado com placa de vídeo)"),
+                  ("qwen2.5:14b", "Qwen 2.5 14B (mais esperto; placa com 12 GB ou mais)"),
+                  ("llama3.1:8b", "Llama 3.1 8B"),
+                  ("qwen2.5:3b", "Qwen 2.5 3B (leve, para PC sem placa de vídeo)")),
+          ajuda="Precisa estar baixado (o instalar.bat oferece; ou rode: ollama pull qwen2.5:7b). Se não estiver, "
+                "ela usa o melhor modelo que você tiver."),
 
     # ------------------------------------------------------------------ Voz
     Campo("VOZ_PROVEDOR", "edge", "Voz", "Voz da Ametista", tipo="opcao",
@@ -295,6 +306,7 @@ def salvar(novos: dict[str, str]) -> list[str]:
 # nesse ajuste) passa para o novo. Roda uma vez por .env; a versão fica anotada num comentário.
 MIGRACOES = {
     2: [("VOZ_VELOCIDADE", "+5%", "-4%")],     # voz mais calma e atenciosa
+    3: [("OLLAMA_MODELO", "qwen2.5:3b", "qwen2.5:7b")],   # cérebro local que sabe usar as ferramentas
 }
 VERSAO_CONFIG = max(MIGRACOES)
 _MARCA = "# versão das configurações:"

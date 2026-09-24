@@ -5,7 +5,8 @@ Ordem de decisão:
   2. Claude na nuvem, em streaming: ela começa a falar a primeira frase enquanto ainda pensa no resto.
      - modelo do dia a dia (rápido) para quase tudo;
      - modelo forte para pedidos difíceis (explicações, análises, a tela). O rápido também pode pedir ajuda.
-  3. Ollama local (também em streaming), se a nuvem falhar ou não houver internet.
+  3. Ollama local (também em streaming e com ferramentas), se a nuvem falhar ou não houver internet, ou
+     primeiro, se ele for o cérebro principal no painel.
 """
 import json
 import re
@@ -120,6 +121,11 @@ def roteador_local(texto: str, sem_nome: bool = False) -> dict | None:
     if re.search(r"\b(faz|faca|fazer|roda|rode) (um )?(auto ?)?diagnostico\b|^diagnostico$", t):
         return _ferramenta("diagnostico", emocao="pensativa")
 
+    # Foco nos estudos
+    r = _rota_foco(t, texto)
+    if r:
+        return r
+
     # Conversa nova
     if re.match(r"^(esquece|apaga) (essa|a|nossa) conversa$|^(nova conversa|muda de assunto)$", t):
         memoria.limpar_historico()
@@ -187,6 +193,35 @@ def roteador_local(texto: str, sem_nome: bool = False) -> dict | None:
             if r["emocao"] == "feliz":
                 r["texto"] = f"{'Ligado' if ligar else 'Desligado'}: {achado[1]}."
             return r
+    return None
+
+
+_RE_ESTUDAR = re.compile(
+    r"^(?:ametista,? )?(?:eu )?(?:vou|bora|hora de|preciso|quero|comecar a|começar a) (?:estudar|focar)"
+    r"(?: (?!(?:por|durante) )(?:de |em |pra |para )?(?:a |o |as |os )?(?P<materia>[^\d]+?))?"
+    r"(?: (?:por|durante) (?P<qtd>\d+|uma|duas|tres|três|meia) ?(?P<un>horas?|h|minutos?|min))?$")
+
+
+def _rota_foco(t: str, original: str) -> dict | None:
+    from . import foco
+
+    o = re.sub(r"[.,!?]+$", "", original.strip().lower()).strip()
+    m = _RE_ESTUDAR.match(o)
+    if m:
+        materia = (m.group("materia") or "").strip()
+        if re.fullmatch(r"(agora|um pouco|um pouquinho|hoje|de novo|mais|junto|comigo)", materia):
+            materia = ""
+        minutos = 0.0
+        if m.group("qtd"):
+            qtd = 30 if m.group("qtd") == "meia" else _numero(normalizar(m.group("qtd"))) or 0
+            minutos = qtd * 60 if m.group("un").startswith("h") and m.group("qtd") != "meia" else qtd
+        return _ferramenta("foco_iniciar", minutos=minutos, materia=materia)
+    if re.match(r"^(terminei|acabei|parei|chega) de estudar$|"
+                r"^(encerra|encerrar|termina|terminar|para|parar|finaliza)( a| o)? (sessao de )?(foco|estudo)$", t):
+        return _ferramenta("foco_parar")
+    m = re.match(r"^(vou fazer uma |faz uma |quero uma )?pausa de (\d+|cinco|dez|quinze|vinte|trinta) ?(minutos?|min)$", t)
+    if m and foco._monitor is not None and foco._monitor.sessao is not None:
+        return _ferramenta("foco_pausar", emocao="neutra", minutos=_numero(m.group(2)) or 5)
     return None
 
 
@@ -313,9 +348,10 @@ def ferramenta_busca_web(modelo: str) -> dict:
 # =====================================================================
 CAPACIDADES = """# O que você consegue fazer
 Você mora no PC de {dono} (Windows), como uma camada por cima da tela, e controla o computador com as
-ferramentas: volume e mídia, abrir e fechar programas, sites, pastas e arquivos, pesquisar, janelas (fechar,
-minimizar), mouse e teclado, ver a tela, área de transferência, digitar, Spotify, Steam, agenda, casa
-inteligente, lembretes e rotinas.
+ferramentas: volume e mídia, abrir e fechar programas, sites, pastas e arquivos, ler e editar arquivos, blocos de
+notas, programas abertos e memória, limpeza, janelas, mouse e teclado, ver a tela, área de transferência, mandar
+arquivos para o celular, foco nos estudos, Spotify, Steam, agenda, casa inteligente, lembretes e rotinas. Nunca
+diga que não consegue acessar o computador: use as ferramentas.
 
 - Ações: execute direto e confirme em poucas palavras ("Pronto!", "Tocando Coldplay."). Nunca diga que fez algo
   sem ter usado a ferramenta e recebido um resultado de sucesso. Se a ferramenta falhar, diga o que houve.
@@ -327,7 +363,16 @@ inteligente, lembretes e rotinas.
   onde clicar use pc_apontar com as coordenadas da imagem. Para clicar ou teclar use pc_clicar e pc_teclas.
 - Tarefas grandes, com vários passos no computador (organizar pastas, preencher um formulário, pesquisar e montar
   uma planilha): use agente_iniciar. Você acompanha o andamento na tela e a pessoa pode cancelar.
-- Arquivos: para abrir um arquivo pelo nome, use arquivos_buscar e depois arquivo_abrir com o caminho.
+- Arquivos: para achar um arquivo pelo nome, use arquivos_buscar; depois arquivo_abrir (abre no programa),
+  arquivo_ler (lê o conteúdo: texto, Word, Excel, PowerPoint, PDF), arquivo_escrever (cria ou edita texto),
+  pasta_listar, arquivo_mover, arquivo_copiar e arquivo_apagar (vai para a Lixeira). "Me manda o arquivo X" pelo
+  celular: arquivo_enviar_celular com o caminho.
+- Blocos de notas: nota_criar, nota_acrescentar, nota_ler, notas_listar; conversa_exportar salva a conversa numa
+  nota (e dá para mandar ao celular depois).
+- O PC por dentro: pc_processos (o que está aberto e quanto pesa), pc_discos, pc_encerrar (fecha à força um
+  programa travado), limpeza_analisar e limpeza_executar (temporários, cache, Lixeira).
+- Estudos: quando {dono} disser que vai estudar ou focar, use foco_iniciar (com a matéria e o tempo, se ele
+  disser); você chama ele de volta se ele se distrair. foco_pausar, foco_parar e foco_relatorio completam.
 
 # Memória
 - lembrar_fato: coisas duradouras sobre {dono} (preferências, pessoas, rotina) quando ele contar ou pedir.
@@ -570,31 +615,10 @@ def ollama_disponivel() -> bool:
 
 def perguntar_ollama(texto: str, falante=None, saida=None, ficha=None, sem_nome: bool = False,
                      origem: str = "pc", troca_privada: bool = False) -> str:
-    sistema = personalidade.sistema_base() + "\n\n" + _prompt_contexto(falante, sem_nome, "rapido", origem,
-                                                                        troca_privada) + \
-        "\n- Você está sem internet agora, usando o cérebro local: não tem ferramentas, só conversa."
-    mensagens = [{"role": "system", "content": sistema}] + memoria.historico() + [{"role": "user", "content": texto}]
-    partes = []
-    with httpx.stream("POST", f"{config.OLLAMA_URL}/api/chat", timeout=90,
-                      json={"model": config.OLLAMA_MODELO, "messages": mensagens, "stream": True}) as r:
-        r.raise_for_status()
-        for linha in r.iter_lines():
-            if ficha is not None and ficha.cancelado:
-                raise Cancelado()
-            if not linha.strip():
-                continue
-            try:
-                dado = json.loads(linha)
-            except ValueError:
-                continue
-            pedaco = (dado.get("message") or {}).get("content", "")
-            if pedaco:
-                partes.append(pedaco)
-                if saida is not None:
-                    saida.texto(pedaco)
-            if dado.get("done"):
-                break
-    return "".join(partes).strip()
+    """O cérebro no próprio PC, com as mesmas ferramentas (veja cerebro_local.py)."""
+    from . import cerebro_local
+
+    return cerebro_local.perguntar(texto, falante, saida, ficha, sem_nome, origem, troca_privada)
 
 
 # =====================================================================
@@ -673,7 +697,16 @@ def pensar(texto: str, falante=None, saida=None, ficha=None, sem_nome: bool = Fa
 
     filtro = _SaidaComFiltro(saida, filtrar=sem_nome)
     bruto, origem_resp, modelo_usado, falha = None, None, None, None
-    if config.ANTHROPIC_API_KEY:
+    local_primeiro = config.CEREBRO_PRINCIPAL == "ollama" and ollama_disponivel()
+    if local_primeiro:
+        try:
+            bruto, origem_resp = perguntar_ollama(texto, falante, filtro, ficha, sem_nome, origem,
+                                                  troca_privada), "local-ia"
+        except Cancelado:
+            raise
+        except Exception as e:
+            print(f"[cerebro] Ollama falhou: {e!r}")
+    if bruto is None and config.ANTHROPIC_API_KEY:
         import anthropic
 
         modelo, tipo = modelo_para(texto)
@@ -703,20 +736,22 @@ def pensar(texto: str, falante=None, saida=None, ficha=None, sem_nome: bool = Fa
                 print(f"[cerebro] Claude falhou: {e!r}")
                 falha = _motivo_falha(e)
                 break
-    if bruto is None and ollama_disponivel():
+    if bruto is None and not local_primeiro and ollama_disponivel():
         try:
             bruto, origem_resp = perguntar_ollama(texto, falante, filtro, ficha, sem_nome, origem,
                                                   troca_privada), "local-ia"
         except Cancelado:
             raise
         except Exception as e:
-            print(f"[cerebro] Ollama falhou: {e}")
+            print(f"[cerebro] Ollama falhou: {e!r}")
     if bruto is None:
         if estado.offline:
             msg = ("Estou sem internet e sem o cérebro local agora. Consigo fazer o básico: hora, timers, música e "
                    "volume.")
         elif falha:
             msg = falha
+        elif local_primeiro:
+            msg = "O Ollama não conseguiu responder agora. Confira se o modelo está baixado e rode o diagnóstico."
         elif not config.ANTHROPIC_API_KEY:
             msg = "Estou sem cérebro na nuvem e sem modelo local agora. Coloque a chave da API no painel ou abra o Ollama."
         else:

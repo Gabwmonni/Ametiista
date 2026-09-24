@@ -49,15 +49,28 @@ def _claude() -> dict:
 
 
 def _ollama() -> dict:
+    from . import cerebro_local
+
+    nome = "Cérebro local (Ollama)"
+    instalados = cerebro_local.modelos_instalados(forcar=True)
     try:
-        r = httpx.get(f"{config.OLLAMA_URL}/api/tags", timeout=2)
-        nomes = [m.get("name", "") for m in r.json().get("models", [])]
-        if any(n.startswith(config.OLLAMA_MODELO.split(":")[0]) for n in nomes):
-            return _item("Cérebro local (Ollama)", OK, f"pronto com {config.OLLAMA_MODELO}")
-        return _item("Cérebro local (Ollama)", AVISO, f"aberto, mas sem o modelo {config.OLLAMA_MODELO} "
-                                                     f"(rode: ollama pull {config.OLLAMA_MODELO})")
+        aberto = httpx.get(f"{config.OLLAMA_URL}/api/tags", timeout=2).status_code == 200
     except Exception:
-        return _item("Cérebro local (Ollama)", AVISO, "desligado (opcional: é a reserva sem internet)")
+        aberto = False
+    if not aberto:
+        if config.CEREBRO_PRINCIPAL == "ollama":
+            return _item(nome, ERRO, "é o cérebro principal, mas o Ollama está fechado (abra o Ollama)")
+        return _item(nome, AVISO, "desligado (opcional: é a reserva sem internet)")
+    usado = cerebro_local.modelo()
+    if not any(cerebro_local._mesmo(m, usado) for m in instalados):
+        return _item(nome, AVISO, f"aberto, mas sem nenhum modelo (rode: ollama pull {config.OLLAMA_MODELO})")
+    detalhe = f"pronto com {usado}"
+    if not cerebro_local._mesmo(usado, config.OLLAMA_MODELO):
+        detalhe += f" ({config.OLLAMA_MODELO} não está baixado: ollama pull {config.OLLAMA_MODELO})"
+    if "tools" not in cerebro_local.capacidades(usado):
+        return _item(nome, AVISO, detalhe + "; esse modelo não sabe usar ferramentas, então pelo Ollama ela só "
+                                            "conversa (use o qwen2.5:7b)")
+    return _item(nome, OK, detalhe + ", com ferramentas")
 
 
 def _ouvido() -> list[dict]:
