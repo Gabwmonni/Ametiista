@@ -5,8 +5,10 @@
 // Autenticação:
 //   PC      -> chave secreta CHAVE_PC (mesma do NUVEM_CHAVE no .env do PC)
 //   celular -> token recebido no pareamento (código mostrado pelo PC, vale 10 minutos)
+// Avisos com o app fechado: Web Push (push.js), com chaves VAPID criadas aqui na primeira vez.
 
 import { DurableObject } from "cloudflare:workers";
+import { enviarPush, gerarVapid } from "./push.js";
 
 const ONLINE_SEM_SINAL_MS = 90_000; // sem notícias do PC há 90 s = desligado/sem internet
 
@@ -55,12 +57,68 @@ export class Rele extends DurableObject {
 
     if (caminho === "/api/ws") return this.conectar(req, url);
     if (caminho === "/api/parear" && req.method === "POST") return this.parear(req);
-    if (caminho === "/api/estado") {
+    if (caminho === "/api/estado" || caminho.startsWith("/api/push/")) {
       const cel = await this.celularValido(this.tokenDe(req, url));
       if (!cel) return json({ erro: "não autorizado" }, 401);
-      return json(await this.estado());
+      if (caminho === "/api/estado") return json(await this.estado());
+      return this.push(caminho, req, url, cel);
     }
     return json({ erro: "não encontrado" }, 404);
+  }
+
+  // ---------------------------------------------------------------- notificações push
+  async vapid() {
+    let v = await this.ctx.storage.get("vapid");
+    if (!v) { v = await gerarVapid(); await this.ctx.storage.put("vapid", v); }
+    return v;
+  }
+
+  async push(caminho, req, url, cel) {
+    if (caminho === "/api/push/chave") return json({ chave: (await this.vapid()).publica });
+    if (req.method !== "POST") return json({ erro: "use POST" }, 405);
+    const tokens = (await this.ctx.storage.get("tokens")) || {};
+    const t = tokens[cel.hash];
+    if (!t) return json({ erro: "não autorizado" }, 401);
+    if (caminho === "/api/push/inscrever") {
+      let corpo = {};
+      try { corpo = await req.json(); } catch {}
+      const ins = corpo.inscricao || {};
+      if (typeof ins.endpoint !== "string" || !ins.endpoint.startsWith("https://") || !ins.keys || !ins.keys.p256dh || !ins.keys.auth)
+        return json({ erro: "inscrição inválida" }, 400);
+      t.push = [{ endpoint: ins.endpoint, keys: { p256dh: ins.keys.p256dh, auth: ins.keys.auth } }];
+      await this.ctx.storage.put("tokens", tokens);
+      await this.ctx.storage.put("origem", url.origin);
+      return json({ ok: true });
+    }
+    if (caminho === "/api/push/cancelar") {
+      delete t.push;
+      await this.ctx.storage.put("tokens", tokens);
+      return json({ ok: true });
+    }
+    if (caminho === "/api/push/testar") {
+      const n = await this.enviarPushes({ titulo: "Ametista", texto: "Os avisos estão funcionando! 💜", quando: Date.now() }, cel.hash);
+      return json({ ok: n > 0, enviados: n });
+    }
+    return json({ erro: "não encontrado" }, 404);
+  }
+
+  async enviarPushes(dados, somenteHash = null) {
+    const tokens = (await this.ctx.storage.get("tokens")) || {};
+    const vapid = await this.vapid();
+    const contato = (await this.ctx.storage.get("origem")) || "mailto:ametista@example.com";
+    let enviados = 0, mudou = false;
+    await Promise.allSettled(Object.entries(tokens).map(async ([hash, t]) => {
+      if (somenteHash && hash !== somenteHash) return;
+      for (const ins of t.push || []) {
+        try {
+          const r = await enviarPush(ins, dados, vapid, contato);
+          if (r.status === 404 || r.status === 410) { delete t.push; mudou = true; }   // celular cancelou a inscrição
+          else if (r.ok) enviados++;
+        } catch {}
+      }
+    }));
+    if (mudou) await this.ctx.storage.put("tokens", tokens);
+    return enviados;
   }
 
   tokenDe(req, url) {
@@ -203,6 +261,7 @@ export class Rele extends DurableObject {
         await this.ctx.storage.put("notificacoes", lista.slice(-50));
         this.paraCelulares({ tipo: "notificacao", ...n });
         await this.ctx.storage.put("pc", pc);
+        await this.enviarPushes(n);   // o próprio celular decide: app aberto na tela = não mostra de novo
         return;
       }
       default: // respostas para um celular específico (ou todos)
@@ -223,7 +282,7 @@ export class Rele extends DurableObject {
     if (!tokens[quem.hash]) { try { ws.close(4001, "não autorizado"); } catch {} return; }
 
     if (msg.tipo === "estado") return ws.send(JSON.stringify({ tipo: "estado", ...(await this.estado()) }));
-    if (!["pedido", "tela", "cancelar"].includes(msg.tipo)) return;
+    if (!["pedido", "tela", "cancelar", "parar_tudo", "privado", "tarefas", "cancelar_tarefa"].includes(msg.tipo)) return;
     // limite de tamanho (áudio de até ~1 minuto)
     if (JSON.stringify(msg).length > 900_000) {
       return ws.send(JSON.stringify({ tipo: "erro", id: msg.id, texto: "Mensagem grande demais." }));

@@ -44,6 +44,17 @@ def _volume_endpoint():
     return cast(interface, POINTER(IAudioEndpointVolume))
 
 
+def volume_atual() -> int | None:
+    """Volume do Windows agora (0-100), ou None se não der para ler."""
+    try:
+        import comtypes
+
+        comtypes.CoInitialize()
+        return round(_volume_endpoint().GetMasterVolumeLevelScalar() * 100)
+    except Exception:
+        return None
+
+
 def volume(acao: str, valor: int = 10) -> str:
     """acao: definir | aumentar | diminuir | mudo | som"""
     try:
@@ -140,22 +151,26 @@ def _apps_instalados() -> list[dict]:
 
 
 def _achar_app(nome: str) -> dict | None:
-    alvo = _norm(APELIDOS.get(_norm(nome), nome))
     apps = _apps_instalados()
     if not apps:
         return None
     nomes = [_norm(a["nome"]) for a in apps]
-    for i, n in enumerate(nomes):  # igual
-        if n == alvo:
-            return apps[i]
-    candidatos = [i for i, n in enumerate(nomes) if alvo in n or all(p in n for p in alvo.split())]
-    if candidatos:  # contém: pega o nome mais curto (ex.: "Word" em vez de "Word Viewer")
-        return apps[min(candidatos, key=lambda i: len(nomes[i]))]
-    for pedaco in alvo.split():  # APELIDOS com alternativas separadas por espaço
-        parecidos = difflib.get_close_matches(pedaco, nomes, n=1, cutoff=0.75)
-        if parecidos:
-            return apps[nomes.index(parecidos[0])]
-    parecidos = difflib.get_close_matches(alvo, nomes, n=1, cutoff=0.6)
+    apelido = APELIDOS.get(_norm(nome))
+    # APELIDOS pode ter alternativas ("calculadora calculator"): tenta cada uma, depois o nome falado
+    alvos = ([apelido] + apelido.split() if apelido else []) + [_norm(nome)]
+    for alvo in alvos:
+        for i, n in enumerate(nomes):  # igual
+            if n == alvo:
+                return apps[i]
+    for alvo in alvos:
+        palavras = alvo.split()
+        candidatos = [i for i, n in enumerate(nomes)
+                      if re.search(rf"\b{re.escape(alvo)}\b", n) or (len(palavras) > 1 and all(
+                          re.search(rf"\b{re.escape(p)}\b", n) for p in palavras))]
+        if candidatos:  # contém: pega o nome mais curto (ex.: "Word" em vez de "Word Viewer")
+            return apps[min(candidatos, key=lambda i: len(nomes[i]))]
+    # nome mal transcrito ("fotoshopi"): só aceita se for bem parecido com o nome inteiro
+    parecidos = difflib.get_close_matches(_norm(nome), nomes, n=1, cutoff=0.78)
     return apps[nomes.index(parecidos[0])] if parecidos else None
 
 
@@ -302,19 +317,58 @@ def janela_ativa_texto() -> str:
 
 def ver_tela(monitor: str = "principal") -> dict:
     """Print da tela (principal ou todas), reduzido, para a IA analisar."""
-    import mss
-    from PIL import Image
+    from . import controle
+    from .ferramentas import CONTEXTO
 
-    with mss.mss() as s:
-        alvo = s.monitors[0] if monitor == "todos" or len(s.monitors) < 2 else s.monitors[1]
-        bruto = s.grab(alvo)
-        img = Image.frombytes("RGB", bruto.size, bruto.rgb)
-    img.thumbnail((1568, 1568))
+    img, geo = controle.capturar(monitor, CONTEXTO.get().get("modelo"))
+    controle.lembrar_captura(geo)
     buf = io.BytesIO()
-    img.save(buf, "JPEG", quality=80)
+    img.save(buf, "JPEG", quality=82)
     titulo = janela_ativa_texto()
     return {"imagem_b64": base64.b64encode(buf.getvalue()).decode(),
-            "texto": f"Print da tela do usuário agora. {titulo}".strip()}
+            "texto": f"Print da tela do usuário agora ({geo['largura']}x{geo['altura']} px; use essas coordenadas "
+                     f"em pc_apontar e pc_clicar). {titulo}".strip()}
+
+
+def tela_cheia() -> bool:
+    """A janela da frente ocupa o monitor inteiro (jogo, filme, apresentação)?"""
+    if not WINDOWS:
+        return False
+    try:
+        import ctypes
+        import ctypes.wintypes
+
+        from . import controle
+
+        u = controle._user32()
+        hwnd = u.GetForegroundWindow()
+        if not hwnd or janela_ativa()[1].lower() in ("explorer.exe", "searchhost.exe", "shellexperiencehost.exe"):
+            return False
+        r = ctypes.wintypes.RECT()
+        u.GetWindowRect(hwnd, ctypes.byref(r))
+        largura = ctypes.windll.user32.GetSystemMetrics(0)
+        altura = ctypes.windll.user32.GetSystemMetrics(1)
+        return r.left <= 0 and r.top <= 0 and r.right >= largura and r.bottom >= altura
+    except Exception:
+        return False
+
+
+def tempo_ocioso() -> float | None:
+    """Segundos desde o último uso do mouse ou teclado (None fora do Windows)."""
+    if not WINDOWS:
+        return None
+    try:
+        import ctypes
+
+        class LASTINPUTINFO(ctypes.Structure):
+            _fields_ = [("cbSize", ctypes.c_uint), ("dwTime", ctypes.c_uint)]
+
+        info = LASTINPUTINFO()
+        info.cbSize = ctypes.sizeof(info)
+        ctypes.windll.user32.GetLastInputInfo(ctypes.byref(info))
+        return ((ctypes.windll.kernel32.GetTickCount() - info.dwTime) & 0xFFFFFFFF) / 1000.0
+    except Exception:
+        return None
 
 
 def area_transferencia(acao: str = "ler", texto: str = "") -> str:
@@ -349,8 +403,8 @@ DEFINICOES = [
          "required": ["acao"]}},
     {"name": "pc_abrir", "description": "Abre um programa instalado, site ou pasta (Downloads, Documentos...).",
      "input_schema": {"type": "object", "properties": {"alvo": {"type": "string"}}, "required": ["alvo"]}},
-    {"name": "pc_fechar", "description": "Fecha um programa (como clicar no X). Confirme antes se houver risco "
-                                         "de perder trabalho não salvo.",
+    {"name": "pc_fechar", "description": "Fecha todas as janelas de um programa (como clicar no X). Pede "
+                                         "confirmação (o sistema cuida disso). Para só a janela da frente use pc_janela.",
      "input_schema": {"type": "object", "properties": {"programa": {"type": "string"}}, "required": ["programa"]}},
     {"name": "pc_pesquisar", "description": "Abre uma pesquisa no navegador.",
      "input_schema": {"type": "object", "properties": {
@@ -358,16 +412,15 @@ DEFINICOES = [
          "onde": {"type": "string", "enum": ["google", "youtube", "maps", "imagens"]}},
          "required": ["consulta"]}},
     {"name": "pc_sistema", "description": "Bloquear, minimizar tudo, suspender, desligar, reiniciar ou cancelar "
-                                          "desligamento. Desligar/reiniciar/suspender: SEMPRE pergunte antes e só "
-                                          "use confirmado=true depois que o usuário disser sim.",
+                                          "desligamento. Desligar/reiniciar/suspender pedem confirmação (o sistema "
+                                          "cuida disso).",
      "input_schema": {"type": "object", "properties": {
          "acao": {"type": "string", "enum": ["bloquear", "minimizar_tudo", "suspender", "desligar", "reiniciar",
-                                              "cancelar_desligamento"]},
-         "confirmado": {"type": "boolean"}}, "required": ["acao"]}},
+                                              "cancelar_desligamento"]}}, "required": ["acao"]}},
     {"name": "pc_status", "description": "Uso de CPU, memória, disco, bateria e programas mais pesados.",
      "input_schema": {"type": "object", "properties": {}}},
     {"name": "pc_ver_tela", "description": "Tira um print da tela para você ver o que o usuário está vendo "
-                                           "(ex.: 'o que é esse erro?', 'resume essa página', 'o que tem na tela?').",
+                                           "(ex.: 'o que é esse erro?', 'resume essa página', 'onde clico?').",
      "input_schema": {"type": "object", "properties": {
          "monitor": {"type": "string", "enum": ["principal", "todos"]}}}},
     {"name": "pc_area_transferencia", "description": "Lê o texto copiado (Ctrl+C) ou copia um texto.",

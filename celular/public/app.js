@@ -94,8 +94,12 @@
     const pil = $("pilula"), est = $("estadoPc"), det = $("detalhePc");
     pil.className = "pilula";
     if (!e) { pil.textContent = "sem conexão"; est.textContent = "Conectando…"; det.textContent = ""; Rosto.modo("dormindo"); return; }
+    const info = e.info || {};
+    $("btnPrivado").setAttribute("aria-pressed", !!info.privado);
+    if (e.online && info.privado) { pil.classList.add("privado"); }
     if (e.online) {
-      pil.classList.add("ligado"); pil.textContent = "PC ligado";
+      if (!info.privado) pil.classList.add("ligado");
+      pil.textContent = info.privado ? "modo privado" : "PC ligado";
       est.textContent = e.desde ? `Ligado desde ${dia(e.desde)} às ${hora(e.desde)}` : "PC ligado";
       const i = e.info || {};
       const partes = [];
@@ -104,6 +108,7 @@
       if (i.ram != null) partes.push(`memória ${i.ram}%`);
       if (i.tocando) partes.push(`♫ ${i.tocando}`);
       if (i.janela) partes.push(`🪟 ${i.janela}`);
+      if (i.tarefa) partes.push(`⚙️ ${i.tarefa}`);
       det.textContent = partes.join(" · ");
       if (Rosto.estado.modo === "dormindo") { Rosto.modo("ocioso"); Rosto.emocao("feliz"); }
     } else {
@@ -137,6 +142,7 @@
       case "estado":
         estado = m; pintarEstado(m);
         for (const n of m.notificacoes || []) mostrarNotificacao(n, true);
+        executarAcaoPendente();
         break;
       case "transcricao": {
         const bolha = aguardando.get(m.id);
@@ -148,9 +154,14 @@
         const bolha = aguardando.get(m.id);
         if (bolha) { bolha.textContent = m.texto; aguardando.delete(m.id); } else adicionar("ela", m.texto);
         Rosto.emocao(m.emocao || "neutra");
+        $("confirmar").classList.toggle("oculta", !m.aguardando);
+        if (m.aguardando) Rosto.modo("aguardando");
         if (m.audio) tocar(m.audio, m.mime);
         break;
       }
+      case "tarefa":
+        pintarTarefa(m.tarefa);
+        break;
       case "tela": {
         const bolha = aguardando.get(m.id);
         if (bolha) { bolha.remove(); aguardando.delete(m.id); }
@@ -183,6 +194,94 @@
     if (!antiga && navigator.vibrate) navigator.vibrate(120);
   }
 
+  // ---------------------------------------------------------------- tarefas do modo agente
+  let tarefaAtual = null;
+  const ESTADOS = { planejando: "planejando…", executando: "em andamento", aguardando: "esperando você",
+                    concluida: "concluída ✅", cancelada: "cancelada", erro: "com problema" };
+  function pintarTarefa(t) {
+    if (!t) return;
+    tarefaAtual = t;
+    const ativa = ["planejando", "executando", "aguardando"].includes(t.estado);
+    $("cartaoTarefa").classList.remove("oculta");
+    $("tarefaTitulo").textContent = t.objetivo;
+    $("tarefaBarra").style.width = (t.progresso || 0) + "%";
+    const atual = (t.passos || []).find((p) => p.estado === "fazendo");
+    $("tarefaPasso").textContent = ativa ? `${ESTADOS[t.estado]}${atual ? " · " + atual.texto : ""}` : (t.resumo || ESTADOS[t.estado]);
+    $("btnCancelarTarefa").classList.toggle("oculta", !ativa);
+    if (!ativa) setTimeout(() => { if (tarefaAtual === t) $("cartaoTarefa").classList.add("oculta"); }, 60_000);
+  }
+  $("btnCancelarTarefa").onclick = () => tarefaAtual && enviar({ tipo: "cancelar_tarefa", tarefa: tarefaAtual.id });
+
+  function pararTudo() {
+    if (!estado || !estado.online) { adicionar("aviso", "O PC está desligado."); return; }
+    const id = "x" + Date.now();
+    aguardando.set(id, digitando());
+    enviar({ tipo: "parar_tudo", id });
+    if (navigator.vibrate) navigator.vibrate(60);
+  }
+
+  $("btnPrivado").onclick = () => {
+    if (!estado || !estado.online) return adicionar("aviso", "O PC está desligado.");
+    const ligado = $("btnPrivado").getAttribute("aria-pressed") === "true";
+    enviar({ tipo: "privado", valor: !ligado });
+    adicionar("aviso", ligado ? "Modo privado desligado no PC." : "Modo privado ligado no PC: microfone, memória e iniciativa desligados.");
+  };
+  $("confirmar").onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    $("confirmar").classList.add("oculta");
+    pedir(b.dataset.resposta);
+  };
+
+  // ---------------------------------------------------------------- avisos com o app fechado (Web Push)
+  const ehIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const instalado = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+
+  function bannerAvisos(texto, botao = true) {
+    $("bannerAvisos").classList.remove("oculta");
+    $("bannerTexto").textContent = texto;
+    $("btnAvisos").classList.toggle("oculta", !botao);
+  }
+
+  async function prepararAvisos() {
+    if (!("serviceWorker" in navigator)) return;
+    if (!("PushManager" in window) || !("Notification" in window)) {
+      if (ehIOS && !instalado) bannerAvisos("No iPhone: toque em Compartilhar → Adicionar à Tela de Início para receber avisos com o app fechado.", false);
+      return;
+    }
+    if (Notification.permission === "denied") return;
+    const reg = await navigator.serviceWorker.ready;
+    const atual = await reg.pushManager.getSubscription();
+    if (atual && Notification.permission === "granted") { inscreverNoPC(atual).catch(() => {}); return; }
+    bannerAvisos("Receba os avisos da Ametista mesmo com o app fechado.");
+  }
+
+  async function inscreverNoPC(inscricao) {
+    const r = await fetch("/api/push/inscrever", { method: "POST", headers: { authorization: "Bearer " + token, "content-type": "application/json" },
+      body: JSON.stringify({ inscricao: inscricao.toJSON() }) });
+    if (!r.ok) throw new Error("não consegui registrar os avisos");
+  }
+
+  $("btnAvisos").onclick = async () => {
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") { bannerAvisos("Sem permissão para avisos. Dá para liberar nas configurações do navegador.", false); return; }
+      const { chave } = await (await fetch("/api/push/chave", { headers: { authorization: "Bearer " + token } })).json();
+      const reg = await navigator.serviceWorker.ready;
+      const inscricao = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: deB64(chave) });
+      await inscreverNoPC(inscricao);
+      $("bannerAvisos").classList.add("oculta");
+      adicionar("aviso", "Avisos ativados: lembretes e alertas chegam mesmo com o app fechado.");
+      fetch("/api/push/testar", { method: "POST", headers: { authorization: "Bearer " + token } }).catch(() => {});
+    } catch (e) {
+      bannerAvisos("Não deu para ativar os avisos: " + e.message, true);
+    }
+  };
+
+  function deB64(t) {
+    const s = atob(t.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((t.length + 3) % 4));
+    return Uint8Array.from(s, (c) => c.charCodeAt(0));
+  }
+
   let contador = 0;
   function pedir(texto) {
     texto = texto.trim();
@@ -206,7 +305,9 @@
   $("atalhos").onclick = (e) => {
     const b = e.target.closest("button"); if (!b) return;
     garantirAudio();
-    b.dataset.pedido === "__tela" ? pedirTela() : pedir(b.dataset.pedido);
+    if (b.dataset.pedido === "__tela") pedirTela();
+    else if (b.dataset.pedido === "__parar") pararTudo();
+    else pedir(b.dataset.pedido);
   };
   $("btnFecharTela").onclick = () => $("modalTela").classList.add("oculta");
   $("btnAtualizarTela").onclick = () => { $("modalTela").classList.add("oculta"); pedirTela(); };
@@ -297,10 +398,22 @@
   }
 
   // ---------------------------------------------------------------- início
+  // atalhos do ícone do app (segurar o ícone): ?acao=falar | tela | parar
+  let acaoPendente = new URLSearchParams(location.search).get("acao");
+  function executarAcaoPendente() {
+    if (!acaoPendente || !estado || !estado.online) return;
+    const a = acaoPendente; acaoPendente = null;
+    history.replaceState(null, "", "/");
+    if (a === "tela") pedirTela();
+    else if (a === "parar") pararTudo();
+    else if (a === "falar") $("entrada").focus();
+  }
+
   function iniciar() {
     mostrarTela("principal");
     pintarEstado(null);
     conectar();
+    prepararAvisos().catch(() => {});
     // confere o estado de tempos em tempos (detecta PC que caiu sem avisar)
     setInterval(() => enviar({ tipo: "estado" }), 30_000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) enviar({ tipo: "estado" }); });

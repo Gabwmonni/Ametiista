@@ -78,3 +78,26 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .modal img { flex: 1; min-height: 0; object-fit: contain; width: 100%; touch-action: pinch-zoom; }
 .modal-botoes { display: flex; gap: 10px; padding: 12px 16px calc(12px + var(--seguro-baixo)); }
 .modal-botoes button { flex: 1; padding: 12px; border-radius: 14px; border: 1px solid var(--borda); background: var(--cartao); }
+
+/* ---------- v2: privado, avisos com o app fechado, tarefas, confirmação ---------- */
+.topo-dir { display: flex; align-items: center; gap: 8px; }
+.chip { border: 1px solid var(--borda); background: var(--cartao); border-radius: 99px; padding: 4px 9px; font-size: 13px; }
+.chip[aria-pressed="true"] { background: #3b2560; border-color: var(--ametista); }
+.pilula.privado { color: #ffcf6b; border-color: #6b5a2d; background: #2a2210; }
+.banner { margin: 0 16px 10px; padding: 10px 12px; border-radius: 16px; background: #231839; border: 1px solid #4a3470;
+  display: flex; gap: 10px; align-items: center; font-size: 14px; }
+.banner span { flex: 1; }
+.banner button { border: 0; border-radius: 12px; padding: 8px 12px; background: var(--ametista-2); font-weight: 600; }
+.cartao-tarefa { margin: 0 16px 10px; padding: 10px 12px; border-radius: 16px; background: var(--cartao);
+  border: 1px solid var(--borda); display: flex; flex-direction: column; gap: 6px; }
+.tarefa-topo { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.tarefa-topo b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tarefa-topo button { border: 1px solid #6b2d45; background: transparent; color: #ff9cb0; border-radius: 10px; padding: 4px 10px; font-size: 13px; }
+.progresso { height: 6px; border-radius: 9px; background: #2b2040; overflow: hidden; }
+.progresso i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #7a3dff, #d9b8ff); transition: width .4s; }
+.tarefa-passo { font-size: 13px; color: var(--fraco); }
+.atalhos button.parar { border-color: #6b2d45; color: #ff9cb0; }
+.confirmar { display: flex; gap: 10px; padding: 0 16px 8px; }
+.confirmar button { flex: 1; padding: 12px; border-radius: 14px; font-weight: 600; border: 1px solid var(--borda); background: var(--cartao); }
+.confirmar .sim { background: #10261c; border-color: #2d6b4f; color: var(--verde); }
+.confirmar .nao { background: #2a1119; border-color: #6b2d45; color: #ff9cb0; }

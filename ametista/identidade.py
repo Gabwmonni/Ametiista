@@ -26,12 +26,17 @@ NIVEIS = ("dono", "familia", "visitante")
 # Ferramentas por nível. O dono pode tudo.
 PROIBIDAS_FAMILIA = {
     "pc_sistema", "pc_fechar", "pc_digitar", "pc_ver_tela", "pc_area_transferencia", "pc_janela_ativa",
-    "steam_instalar", "agenda_listar", "agenda_criar", "agenda_alterar", "agenda_cancelar",
+    "pc_clicar", "pc_teclas", "pc_rolar", "pc_apontar", "steam_instalar",
+    "agenda_listar", "agenda_criar", "agenda_alterar", "agenda_cancelar",
     "pessoas_cadastrar", "pessoas_remover", "lembrar_fato", "esquecer_fato",
+    "memoria_buscar", "memoria_apagar_conversas", "caderno_guardar", "caderno_buscar", "caderno_listar",
+    "caderno_apagar", "arquivos_buscar", "arquivo_abrir", "arquivo_mostrar_na_pasta", "agente_iniciar",
+    "tarefa_cancelar", "acoes_listar", "desfazer_acao", "modo_privado", "rotina_criar", "rotina_apagar",
 }
 PERMITIDAS_VISITANTE = {
     "clima", "noticias", "criar_timer", "web_search", "pc_midia", "pc_volume",
     "spotify_tocar", "spotify_controle", "spotify_volume", "spotify_tocando", "spotify_fila",
+    "chamar_modelo_forte",
 }
 
 FRASES_CADASTRO = [

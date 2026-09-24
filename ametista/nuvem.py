@@ -107,12 +107,17 @@ class Nuvem:
 
         from . import pc, spotify
 
+        from . import agente, estado
+
         info = {"nome": platform.node(), "cpu": round(psutil.cpu_percent(interval=0.3)),
-                "ram": round(psutil.virtual_memory().percent)}
+                "ram": round(psutil.virtual_memory().percent), "privado": estado.privado()}
+        tarefas = agente.resumo_ativas()
+        if tarefas:
+            info["tarefa"] = tarefas[:80]
         bat = psutil.sensors_battery() if hasattr(psutil, "sensors_battery") else None
         if bat:
             info["bateria"] = round(bat.percent)
-        if config.NUVEM_MOSTRAR_JANELA:
+        if config.NUVEM_MOSTRAR_JANELA and not info["privado"]:
             titulo, prog = pc.janela_ativa()
             if titulo and not prog.lower().startswith("python"):
                 info["janela"] = titulo[:60]
@@ -134,6 +139,24 @@ class Nuvem:
                 self._pedido(msg, para, pid)
             elif tipo == "tela":
                 self._tela(para, pid)
+            elif tipo == "parar_tudo":
+                from . import nucleo
+
+                texto = nucleo.parar_tudo("celular")
+                self.enviar({"tipo": "resposta", "para": para, "id": pid, "texto": texto, "emocao": "neutra"})
+            elif tipo == "privado":
+                from . import estado
+
+                estado.definir_privado(bool(msg.get("valor")))
+                self.enviar({"tipo": "status", "info": self._info()})
+            elif tipo == "tarefas":
+                from . import agente
+
+                self.enviar({"tipo": "tarefas", "para": para, "id": pid, "tarefas": agente.listar()})
+            elif tipo == "cancelar_tarefa":
+                from . import agente
+
+                agente.cancelar(str(msg.get("tarefa", "")))
             elif tipo == "celular_pareado":
                 eventos.publicar({"tipo": "aviso", "texto": f"Celular conectado: {msg.get('nome', '')}."})
         except Exception as e:
@@ -156,10 +179,15 @@ class Nuvem:
         eventos.publicar({"tipo": "aviso_celular", "texto": texto, "interno": True})
         # O celular pareado é do dono: atende com permissão total
         r = nucleo.atender(texto, DONO_PADRAO, origem="celular")
+        if r.get("cancelado"):
+            self.enviar({"tipo": "erro", "para": para, "id": pid, "texto": "Pedido cancelado."})
+            return
+        from .voz import mime_de
+
         audio = r.get("audio")
-        mime = "audio/wav" if audio and audio.startswith("UklGR") else "audio/mpeg"  # UklGR = "RIFF"
         self.enviar({"tipo": "resposta", "para": para, "id": pid, "texto": r.get("texto", ""),
-                     "emocao": r.get("emocao", "neutra"), "audio": audio, "mime": mime})
+                     "emocao": r.get("emocao", "neutra"), "audio": audio, "mime": mime_de(audio),
+                     "aguardando": r.get("aguardando", False)})
 
     def _tela(self, para: str, pid: str) -> None:
         from PIL import Image
@@ -178,10 +206,14 @@ class Nuvem:
     # ------------------------------------------------------------ avisos para o celular
     def _evento(self, msg: dict) -> None:
         tipo = msg.get("tipo")
-        if tipo == "alerta":
-            self._notificar("Ametista", msg.get("texto", ""))
-        elif tipo == "notificar_celular":
+        if tipo == "notificar_celular":
             self._notificar(msg.get("titulo", "Ametista"), msg.get("texto", ""))
+        elif tipo == "tarefa" and self.conectada:  # andamento do modo agente, ao vivo no celular
+            threading.Thread(target=self.enviar, args=({"tipo": "tarefa", "tarefa": msg.get("tarefa")},),
+                             daemon=True).start()
+        elif tipo in ("privado", "parou_tudo") and self.conectada:
+            threading.Thread(target=lambda: self.enviar({"tipo": "status", "info": self._info()}),
+                             daemon=True).start()
 
     def _notificar(self, titulo: str, texto: str) -> None:
         if self.conectada and texto:

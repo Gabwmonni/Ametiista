@@ -33,8 +33,16 @@
   <section id="telaPrincipal" class="tela oculta">
     <header class="topo">
       <div class="marca"><span class="mini-gema" aria-hidden="true"></span> Ametista</div>
-      <span id="pilula" class="pilula">…</span>
+      <div class="topo-dir">
+        <button id="btnPrivado" class="chip" aria-pressed="false" title="Modo privado no PC">🔒</button>
+        <span id="pilula" class="pilula">…</span>
+      </div>
     </header>
+
+    <div id="bannerAvisos" class="banner oculta">
+      <span id="bannerTexto">Receba os avisos da Ametista mesmo com o app fechado.</span>
+      <button id="btnAvisos">Ativar avisos</button>
+    </div>
 
     <div class="cartao-pc" id="cartaoPc">
       <canvas id="rosto" data-transparente="1" aria-hidden="true"></canvas>
@@ -44,7 +52,14 @@
       </div>
     </div>
 
+    <div id="cartaoTarefa" class="cartao-tarefa oculta" aria-live="polite">
+      <div class="tarefa-topo"><b id="tarefaTitulo"></b><button id="btnCancelarTarefa">Cancelar</button></div>
+      <div class="progresso"><i id="tarefaBarra"></i></div>
+      <div id="tarefaPasso" class="tarefa-passo"></div>
+    </div>
+
     <div class="atalhos" id="atalhos">
+      <button data-pedido="__parar" class="parar">⏹ Parar tudo</button>
       <button data-pedido="__tela">🖥️ Ver tela</button>
       <button data-pedido="Pausa a música">⏯️ Pausar</button>
       <button data-pedido="Próxima música">⏭️ Próxima</button>
@@ -54,6 +69,11 @@
     </div>
 
     <main id="conversa" class="conversa" aria-live="polite"></main>
+
+    <div id="confirmar" class="confirmar oculta">
+      <button data-resposta="sim" class="sim">Sim</button>
+      <button data-resposta="não" class="nao">Não</button>
+    </div>
 
     <form id="formPedido" class="barra">
       <input id="entrada" autocomplete="off" placeholder="Peça algo para a Ametista…" aria-label="Mensagem">

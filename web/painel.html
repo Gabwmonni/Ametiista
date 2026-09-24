@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ametista — Configurações</title>
+<link rel="stylesheet" href="/static/painel.css">
+</head>
+<body data-token="{{TOKEN}}">
+  <header class="topo">
+    <div class="marca"><span class="gema" aria-hidden="true"></span> <span id="titulo">Ametista</span>
+      <span class="versao" id="versao"></span></div>
+    <div class="chips">
+      <button id="chipPrivado" class="chip" aria-pressed="false" title="Desliga microfone, memória e iniciativa">🔒 Modo privado</button>
+      <button id="chipSilencio" class="chip" aria-pressed="false" title="Ela não puxa assunto por 1 hora">🌙 Não perturbe</button>
+      <button id="btnParar" class="chip perigo" title="Cala, cancela tudo e pausa a música">⏹ Parar tudo</button>
+    </div>
+  </header>
+
+  <div class="corpo">
+    <nav class="menu" id="menu" aria-label="Seções"></nav>
+    <main class="conteudo" id="conteudo" tabindex="-1"></main>
+  </div>
+
+  <div class="rodape" id="rodape" hidden>
+    <span id="rodapeTexto">Você tem alterações não salvas.</span>
+    <button id="btnDescartar" class="secundario">Descartar</button>
+    <button id="btnSalvar" class="primario">Salvar</button>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="/static/painel.js"></script>
+</body>
+</html>

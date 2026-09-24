@@ -30,7 +30,7 @@ INSTRUCOES = """Steam: para instalar um jogo siga SEMPRE esta ordem:
    e ver se ele já está instalado e quanto espaço precisa;
 2) se não estiver instalado, steam_unidades e diga quanto espaço livre tem em cada disco e em qual cabe;
 3) pergunte em qual unidade instalar e só então use steam_instalar.
-Se a Steam precisar reiniciar, avise e peça confirmação. Se pedirem para avisar quando terminar,
+Se a Steam precisar reiniciar, o sistema pede a confirmação. Se pedirem para avisar quando terminar,
 use steam_avisar_quando_pronto. Para "já está instalado?" use steam_buscar_jogo ou steam_status."""
 
 
@@ -259,6 +259,21 @@ def _reiniciar_steam() -> None:
         _abrir_url("steam://open/downloads")
 
 
+def _normalizar_unidade(unidade: str) -> str:
+    uni = unidade.strip().rstrip(":\\/").upper()
+    return f"{uni}:" if len(uni) == 1 else uni
+
+
+def precisa_reiniciar_para(unidade: str, appid: int) -> bool:
+    """Instalar nessa unidade vai reiniciar a Steam? (usado para pedir confirmação antes)"""
+    if not disponivel() or not _steam_rodando():
+        return False
+    if any(j["appid"] == int(appid) for j in jogos_instalados()):
+        return False
+    uni = _normalizar_unidade(unidade)
+    return any(_unidade_de(l) == uni for l in bibliotecas())
+
+
 def instalar(appid: int, unidade: str, confirmado_reiniciar: bool = False) -> str:
     appid = int(appid)
     if not disponivel():
@@ -269,8 +284,7 @@ def instalar(appid: int, unidade: str, confirmado_reiniciar: bool = False) -> st
             return f"{ja['nome']} já está instalado em {ja['unidade']}."
         return f"{ja['nome']} já está baixando em {ja['unidade']}."
 
-    uni = unidade.strip().rstrip(":\\/").upper()
-    uni = f"{uni}:" if len(uni) == 1 else uni
+    uni = _normalizar_unidade(unidade)
     libs = [l for l in bibliotecas() if _unidade_de(l) == uni]
     if not libs:
         _abrir_url(f"steam://install/{appid}")
@@ -279,7 +293,7 @@ def instalar(appid: int, unidade: str, confirmado_reiniciar: bool = False) -> st
 
     if _steam_rodando() and not confirmado_reiniciar:
         return ("PRECISA CONFIRMAR: para instalar direto em " + uni + " a Steam precisa reiniciar "
-                "(downloads e jogos abertos na Steam vão fechar). Pergunte e repita com confirmado_reiniciar=true.")
+                "(downloads e jogos abertos na Steam vão fechar).")
 
     nome = _nome_loja(appid) or f"app{appid}"
     pasta_jogo = re.sub(r'[<>:"/\\|?*]', "", nome).strip() or f"app{appid}"
@@ -386,8 +400,8 @@ DEFINICOES = [
     {"name": "steam_instalar",
      "description": "Instala um jogo (appid) na unidade escolhida pela pessoa. Só use depois de perguntar a unidade.",
      "input_schema": {"type": "object", "properties": {
-         "appid": {"type": "integer"}, "unidade": {"type": "string", "description": "Ex.: D:"},
-         "confirmado_reiniciar": {"type": "boolean"}}, "required": ["appid", "unidade"]}},
+         "appid": {"type": "integer"}, "unidade": {"type": "string", "description": "Ex.: D:"}},
+         "required": ["appid", "unidade"]}},
     {"name": "steam_status", "description": "Diz se um jogo (appid) está instalado ou quanto falta baixar.",
      "input_schema": {"type": "object", "properties": {"appid": {"type": "integer"}}, "required": ["appid"]}},
     {"name": "steam_avisar_quando_pronto",

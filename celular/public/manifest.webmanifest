@@ -10,5 +10,13 @@
   "icons": [
     { "src": "/icone-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Falar com a Ametista", "short_name": "Falar", "url": "/?acao=falar",
+      "icons": [{ "src": "/icone-192.png", "sizes": "192x192" }] },
+    { "name": "Ver a tela do PC", "short_name": "Ver tela", "url": "/?acao=tela",
+      "icons": [{ "src": "/icone-192.png", "sizes": "192x192" }] },
+    { "name": "Parar tudo no PC", "short_name": "Parar tudo", "url": "/?acao=parar",
+      "icons": [{ "src": "/icone-192.png", "sizes": "192x192" }] }
   ]
 }

@@ -7,7 +7,6 @@ Conectar (uma vez cada, passo a passo no LEIA-ME):
 
 Os ids dos eventos têm prefixo: g:... (Google) e m:... (Microsoft).
 """
-import json
 import threading
 from datetime import date, datetime, timedelta
 
@@ -24,8 +23,8 @@ GRAPH = "https://graph.microsoft.com/v1.0"
 GCAL = "https://www.googleapis.com/calendar/v3"
 
 INSTRUCOES = """Agenda (Google e Outlook): para mudar ou cancelar um compromisso, primeiro use agenda_listar
-para achar o id. Antes de cancelar, confirme com a pessoa. Ao criar sem dizer qual agenda, use a padrão.
-Leia horários de forma falada ("às duas da tarde")."""
+para achar o id. Cancelar pede confirmação (o sistema cuida disso). Ao criar sem dizer qual agenda, use a
+padrão. Leia horários de forma falada ("às duas da tarde")."""
 
 
 def _tz():
@@ -290,6 +289,22 @@ def _obter(prov: str, eid: str) -> dict:
                 "fim": _parse(e["end"].get("dateTime") or e["end"]["date"])}
     e = _m("GET", f"/me/events/{eid}", params={"$select": "start,end"})
     return {"inicio": _ms_data(e["start"]), "fim": _ms_data(e["end"])}
+
+
+def obter(id: str) -> dict:
+    """Dados completos de um compromisso (usado para desfazer alterações e cancelamentos)."""
+    prov, eid = id.split(":", 1)
+    if prov == "g":
+        e = _g("GET", f"/calendars/primary/events/{eid}")
+        ini, fi = e.get("start", {}), e.get("end", {})
+        return {"titulo": e.get("summary", ""), "local": e.get("location", ""), "agenda": "google",
+                "inicio": _parse(ini.get("dateTime") or ini.get("date")).isoformat(timespec="minutes"),
+                "fim": _parse(fi.get("dateTime") or fi.get("date")).isoformat(timespec="minutes"),
+                "dia_inteiro": "date" in ini}
+    e = _m("GET", f"/me/events/{eid}", params={"$select": "subject,start,end,location,isAllDay"})
+    return {"titulo": e.get("subject") or "", "local": (e.get("location") or {}).get("displayName", ""),
+            "agenda": "outlook", "inicio": _ms_data(e["start"]).isoformat(timespec="minutes"),
+            "fim": _ms_data(e["end"]).isoformat(timespec="minutes"), "dia_inteiro": e.get("isAllDay", False)}
 
 
 def cancelar(id: str) -> str:

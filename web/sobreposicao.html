@@ -6,24 +6,66 @@
 <title>Ametista</title>
 <link rel="stylesheet" href="/static/sobreposicao.css">
 </head>
-<body>
-  <div id="painel" class="painel" role="dialog" aria-label="Ametista">
+<body data-token="{{TOKEN}}">
+  <div id="painel" class="painel" data-modo="compacto" role="dialog" aria-label="Ametista">
     <div class="borda" aria-hidden="true"></div>
     <div class="conteudo">
-      <canvas id="rosto" data-transparente="1"></canvas>
-      <div class="lado">
-        <div class="topo">
-          <span id="status" class="status">Ametista</span>
-          <span id="origem" class="origem"></span>
-        </div>
-        <div id="pedido" class="pedido"></div>
-        <div id="resposta" class="resposta"></div>
-        <form id="formulario" class="formulario">
-          <input id="entrada" autocomplete="off" spellcheck="false" placeholder="Pergunte ou peça algo…">
-          <button type="button" id="btnMic" title="Falar (Ctrl+Shift+Espaço)" aria-label="Falar">
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg>
+
+      <!-- Área expandida: conversa, tarefas, avisos e histórico de ações -->
+      <section id="expandido" class="expandido" aria-label="Detalhes">
+        <nav class="abas" role="tablist">
+          <button role="tab" data-aba="conversa" class="ativa">Conversa</button>
+          <button role="tab" data-aba="tarefas">Tarefas <span class="contador" id="nTarefas"></span></button>
+          <button role="tab" data-aba="avisos">Avisos <span class="contador" id="nAvisos"></span></button>
+          <button role="tab" data-aba="historico">Histórico</button>
+          <span class="espaco"></span>
+          <button id="btnPainel" class="icone" title="Configurações" aria-label="Configurações">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.7 7.7 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.5 7.5 0 0 0-1.7-1L15 3h-4l-.4 2.6a7.5 7.5 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.7 7.7 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1L11 21h4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6ZM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg>
           </button>
-        </form>
+        </nav>
+        <div class="lista" id="abaConversa" role="tabpanel" aria-live="polite"></div>
+        <div class="lista oculta" id="abaTarefas" role="tabpanel"></div>
+        <div class="lista oculta" id="abaAvisos" role="tabpanel"></div>
+        <div class="lista oculta" id="abaHistorico" role="tabpanel"></div>
+      </section>
+
+      <!-- Barra principal -->
+      <div class="barra">
+        <canvas id="rosto" data-transparente="1"></canvas>
+        <div class="lado">
+          <div class="topo">
+            <span id="status" class="status">Ametista</span>
+            <span id="origem" class="origem"></span>
+            <span class="botoes">
+              <button id="btnParar" class="icone parar" title="Parar tudo (Ctrl+Shift+Backspace)" aria-label="Parar tudo">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
+              </button>
+              <button id="btnPrivado" class="icone" title="Modo privado: desliga microfone, memória e iniciativa" aria-label="Modo privado" aria-pressed="false">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M17 9V7a5 5 0 0 0-10 0v2H5v12h14V9h-2Zm-8-2a3 3 0 0 1 6 0v2H9V7Z"/></svg>
+              </button>
+              <button id="btnExpandir" class="icone" title="Conversa, tarefas, avisos e histórico" aria-label="Expandir" aria-expanded="false">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M4 14h2v4h4v2H4v-6Zm0-4V4h6v2H6v4H4Zm14 8h-4v2h6v-6h-2v4ZM14 4v2h4v4h2V4h-6Z"/></svg>
+              </button>
+            </span>
+          </div>
+          <div id="pedido" class="pedido"></div>
+          <div id="resposta" class="resposta"></div>
+          <div id="confirmar" class="confirmar oculta" role="group" aria-label="Confirmação">
+            <button id="btnSim" class="sim">Sim</button>
+            <button id="btnNao" class="nao">Não</button>
+          </div>
+          <div id="tarefaInfo" class="tarefa-info" aria-live="polite">
+            <div id="tarefaTitulo" class="tarefa-titulo"></div>
+            <div class="progresso"><i id="tarefaBarra"></i></div>
+            <div id="tarefaPasso" class="tarefa-passo"></div>
+          </div>
+          <form id="formulario" class="formulario">
+            <input id="entrada" autocomplete="off" spellcheck="false" placeholder="Pergunte ou peça algo…" aria-label="Mensagem">
+            <button type="button" id="btnMic" title="Falar (Ctrl+Shift+Espaço)" aria-label="Falar">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg>
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   </div>

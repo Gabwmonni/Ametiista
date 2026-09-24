@@ -1,33 +1,62 @@
 """App de desktop: sobreposição transparente por cima do Windows + ícone na bandeja.
 
-- Janela sem borda, sempre no topo, transparente, fora da barra de tarefas.
-- Aparece sozinha quando ouve "Ametista", no atalho (Ctrl+Shift+Espaço) ou em alarmes.
-- Não rouba o foco do programa que você está usando (a não ser pelo atalho, para poder digitar).
+- Janela sem borda, sempre no topo, transparente, fora da barra de tarefas e fora dos prints.
+- Aparece sozinha quando ouve "Ametista", no atalho (Ctrl+Shift+Espaço) ou em avisos.
+- Três tamanhos: compacto (a barra), expandido (conversa, tarefas, avisos, histórico) e tarefa
+  (um cartãozinho no canto enquanto o modo agente usa a tela; os cliques passam através dele).
+- Apontador: um círculo piscando onde clicar ("Ametista, onde eu clico?").
+- Atalho de emergência (Ctrl+Shift+Backspace): para tudo.
 """
 import os
 import socket
+import subprocess
 import sys
+import threading
 import time
 import webbrowser
 
 # Toca áudio sem precisar de clique (a janela nunca recebe clique antes de falar)
 os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--autoplay-policy=no-user-gesture-required")
 
-from PySide6.QtCore import QObject, QPointF, Qt, QTimer, QUrl, Signal  # noqa: E402
-from PySide6.QtGui import QAction, QColor, QGuiApplication, QIcon, QPainter, QPixmap, QPolygonF  # noqa: E402
+from PySide6.QtCore import QObject, QPoint, QPointF, QRectF, Qt, QTimer, QUrl, Signal  # noqa: E402
+from PySide6.QtGui import (QAction, QColor, QFont, QGuiApplication, QIcon, QPainter, QPen, QPixmap,  # noqa: E402
+                           QPolygonF)
 from PySide6.QtWebEngineCore import QWebEngineSettings  # noqa: E402
 from PySide6.QtWebEngineWidgets import QWebEngineView  # noqa: E402
 from PySide6.QtWidgets import (QApplication, QDialog, QInputDialog, QLabel, QMenu, QMessageBox,  # noqa: E402
                                QSystemTrayIcon, QVBoxLayout, QWidget)
 
-from . import agenda, autoinicio, config, eventos, identidade, nuvem, servidor, spotify  # noqa: E402
+from . import agenda, autoinicio, config, estado, eventos, identidade, nuvem, servidor, spotify  # noqa: E402
 
-LARGURA, ALTURA = 760, 250
+TAMANHOS = {"compacto": (760, 250), "expandido": (800, 650), "tarefa": (440, 130)}
 
 
 class Ponte(QObject):
     """Leva eventos de outras threads para a thread da interface."""
     evento = Signal(dict)
+
+
+def _fora_dos_prints(widget: QWidget) -> None:
+    """A janela some dos prints (a IA vê o que está atrás dela, não ela mesma)."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        WDA_EXCLUDEFROMCAPTURE = 0x11
+        ctypes.windll.user32.SetWindowDisplayAffinity(int(widget.winId()), WDA_EXCLUDEFROMCAPTURE)
+    except Exception as e:
+        print(f"[desktop] não consegui ocultar dos prints: {e}")
+
+
+def ponto_logico(px: int, py: int) -> QPoint:
+    """Pixel real da tela (o que o mss e o mouse usam) -> coordenada do Qt (que desconta a escala do Windows)."""
+    for s in QGuiApplication.screens():
+        g, dpr = s.geometry(), s.devicePixelRatio()
+        if g.x() <= px < g.x() + g.width() * dpr and g.y() <= py < g.y() + g.height() * dpr:
+            return QPoint(int(g.x() + (px - g.x()) / dpr), int(g.y() + (py - g.y()) / dpr))
+    dpr = QGuiApplication.primaryScreen().devicePixelRatio()
+    return QPoint(int(px / dpr), int(py / dpr))
 
 
 class Sobreposicao(QWidget):
@@ -36,7 +65,8 @@ class Sobreposicao(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(config.NOME)
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+        self.modo = "compacto"
+        self._aplicar_flags()
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setStyleSheet("background: transparent;")
@@ -54,37 +84,106 @@ class Sobreposicao(QWidget):
         layout.addWidget(self.web)
         self.web.load(QUrl(f"http://127.0.0.1:{config.PORTA}/?sobreposicao=1"))
         self.posicionar()
-        self._protegida = False
+
+    def _aplicar_flags(self) -> None:
+        flags = Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
+        if self.modo == "tarefa":
+            flags |= Qt.WindowTransparentForInput  # o modo agente clica através dela
+        self.setWindowFlags(flags)
 
     def posicionar(self):
         tela = QGuiApplication.primaryScreen().availableGeometry()  # já desconta a barra de tarefas
-        self.setGeometry(tela.x() + (tela.width() - LARGURA) // 2, tela.bottom() - ALTURA - 4, LARGURA, ALTURA)
+        largura, altura = TAMANHOS.get(self.modo, TAMANHOS["compacto"])
+        altura = min(altura, tela.height() - 20)
+        if self.modo == "tarefa":
+            x, y = tela.right() - largura - 8, tela.bottom() - altura - 4
+        else:
+            x, y = tela.x() + (tela.width() - largura) // 2, tela.bottom() - altura - 4
+        self.setGeometry(x, y, largura, altura)
+
+    def mudar_modo(self, modo: str):
+        if modo not in TAMANHOS or modo == self.modo:
+            return
+        visivel = self.isVisible()
+        antigo, self.modo = self.modo, modo
+        if (antigo == "tarefa") != (modo == "tarefa"):
+            self._aplicar_flags()  # trocar as flags esconde a janela
+        self.posicionar()
+        if visivel or modo in ("expandido", "tarefa"):
+            self.aparecer(focar=modo == "expandido")
 
     def aparecer(self, focar: bool = False):
         self.posicionar()
         if not self.isVisible():
             self.show()
+            _fora_dos_prints(self)
         self.raise_()
-        if focar:
+        if focar and self.modo != "tarefa":
             self.activateWindow()
             self.web.setFocus()
-        self._fora_dos_prints()
-
-    def _fora_dos_prints(self):
-        """Some dos prints (pc_ver_tela vê o que está atrás dela, não ela mesma)."""
-        if self._protegida or sys.platform != "win32":
-            return
-        try:
-            import ctypes
-
-            WDA_EXCLUDEFROMCAPTURE = 0x11
-            ctypes.windll.user32.SetWindowDisplayAffinity(int(self.winId()), WDA_EXCLUDEFROMCAPTURE)
-            self._protegida = True
-        except Exception as e:
-            print(f"[desktop] não consegui ocultar dos prints: {e}")
 
 
-def icone_gema(tamanho: int = 64, apagada: bool = False) -> QIcon:
+class Apontador(QWidget):
+    """Círculo piscando num ponto da tela, com uma legenda ("clique aqui")."""
+
+    def __init__(self):
+        super().__init__()
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.WindowTransparentForInput)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.resize(260, 190)
+        self.rotulo = ""
+        self.fase = 0.0
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self._animar)
+        self.fim = 0.0
+
+    def mostrar(self, px: int, py: int, rotulo: str = ""):
+        p = ponto_logico(px, py)
+        self.rotulo = rotulo
+        self.move(p.x() - 130, p.y() - 70)
+        self.fim = time.time() + 7
+        if not self.isVisible():
+            self.show()
+            _fora_dos_prints(self)
+        self.raise_()
+        self.timer.start(33)
+
+    def _animar(self):
+        self.fase = (self.fase + 0.045) % 1.0
+        if time.time() > self.fim:
+            self.timer.stop()
+            self.hide()
+        self.update()
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        centro = QPointF(130, 70)
+        for i in range(2):
+            f = (self.fase + i * 0.5) % 1.0
+            r = 12 + f * 44
+            cor = QColor(183, 125, 255, int(255 * (1 - f)))
+            p.setPen(QPen(cor, 4))
+            p.setBrush(Qt.NoBrush)
+            p.drawEllipse(centro, r, r)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(183, 125, 255, 230))
+        p.drawEllipse(centro, 7, 7)
+        if self.rotulo:
+            p.setFont(QFont("Segoe UI", 10, QFont.DemiBold))
+            m = p.fontMetrics()
+            largura = min(250, m.horizontalAdvance(self.rotulo) + 20)
+            caixa = QRectF(130 - largura / 2, 128, largura, 26)
+            p.setBrush(QColor(16, 10, 28, 235))
+            p.setPen(QPen(QColor(183, 125, 255, 200), 1))
+            p.drawRoundedRect(caixa, 12, 12)
+            p.setPen(QColor(241, 234, 255))
+            p.drawText(caixa, Qt.AlignCenter, m.elidedText(self.rotulo, Qt.ElideRight, int(largura - 16)))
+        p.end()
+
+
+def icone_gema(tamanho: int = 64, apagada: bool = False, cadeado: bool = False) -> QIcon:
     pix = QPixmap(tamanho, tamanho)
     pix.fill(Qt.transparent)
     p = QPainter(pix)
@@ -98,6 +197,12 @@ def icone_gema(tamanho: int = 64, apagada: bool = False) -> QIcon:
     p.setBrush(cor1)
     p.drawPolygon(QPolygonF([QPointF(t * .5, t * .04), QPointF(t * .92, t * .38), QPointF(t * .5, t * .5),
                              QPointF(t * .08, t * .38)]))
+    if cadeado:
+        p.setBrush(QColor("#ffcf6b"))
+        p.drawRoundedRect(QRectF(t * .56, t * .6, t * .38, t * .32), t * .05, t * .05)
+        p.setPen(QPen(QColor("#ffcf6b"), t * .07))
+        p.setBrush(Qt.NoBrush)
+        p.drawArc(QRectF(t * .62, t * .42, t * .26, t * .32), 0, 180 * 16)
     p.end()
     return QIcon(pix)
 
@@ -106,17 +211,26 @@ class Bandeja(QSystemTrayIcon):
     def __init__(self, janela: Sobreposicao, app: QApplication):
         super().__init__(icone_gema())
         self.janela, self.app = janela, app
+        self.mic_ligado = True
         self.setToolTip(f"{config.NOME} — diga \"{config.NOME}\" ou {config.ATALHO}")
         menu = QMenu()
         menu.addAction(f"Chamar ({config.ATALHO})", self.chamar)
+        menu.addAction(f"Parar tudo ({config.ATALHO_PARAR})", self.parar_tudo)
         menu.addSeparator()
+        self.acao_privado = QAction("Modo privado", menu, checkable=True, checked=estado.privado())
+        self.acao_privado.toggled.connect(lambda v: estado.definir_privado(v))
+        menu.addAction(self.acao_privado)
+        self.acao_silencio = QAction("Não perturbe (1 hora)", menu, checkable=True,
+                                     checked=bool(estado.nao_perturbe_ate()))
+        self.acao_silencio.toggled.connect(self.alternar_silencio)
+        menu.addAction(self.acao_silencio)
         self.acao_mic = QAction("Microfone ligado", menu, checkable=True, checked=True)
         self.acao_mic.toggled.connect(self.alternar_mic)
         menu.addAction(self.acao_mic)
-        self.acao_auto = QAction("Iniciar com o Windows", menu, checkable=True, checked=autoinicio.ativo())
-        self.acao_auto.toggled.connect(autoinicio.definir)
-        menu.addAction(self.acao_auto)
         menu.addSeparator()
+        menu.addAction("Configurações…", abrir_painel)
+        menu.addAction("Conversa, tarefas e histórico", lambda: self.janela.mudar_modo("expandido"))
+        menu.addAction("Fazer um diagnóstico", self.diagnostico)
         vozes = menu.addMenu("Vozes")
         vozes.addAction("Cadastrar a minha voz", lambda: self.cadastrar(config.DONO, "dono"))
         vozes.addAction("Cadastrar outra pessoa…", self.cadastrar_outra)
@@ -129,6 +243,9 @@ class Bandeja(QSystemTrayIcon):
         contas.addAction("Spotify", spotify.abrir_login)
         contas.addAction("Google Agenda", lambda: self._em_segundo_plano(agenda.conectar_google))
         contas.addAction("Outlook", lambda: self._em_segundo_plano(agenda.conectar_outlook))
+        self.acao_auto = QAction("Iniciar com o Windows", menu, checkable=True, checked=autoinicio.ativo())
+        self.acao_auto.toggled.connect(autoinicio.definir)
+        menu.addAction(self.acao_auto)
         menu.addAction("Abrir no navegador (teste)", lambda: webbrowser.open(f"http://127.0.0.1:{config.PORTA}"))
         menu.addAction("Abrir pasta da Ametista", lambda: os.startfile(str(config.RAIZ))
                        if sys.platform == "win32" else None)
@@ -137,14 +254,47 @@ class Bandeja(QSystemTrayIcon):
         self.setContextMenu(menu)
         self.activated.connect(lambda motivo: self.chamar() if motivo == QSystemTrayIcon.Trigger else None)
         self._menu = menu  # mantém referência viva
+        self.pintar()
+
+    def pintar(self):
+        privado = estado.privado()
+        self.setIcon(icone_gema(apagada=privado or not self.mic_ligado or estado.offline, cadeado=privado))
+        dica = f"{config.NOME} — " + ("modo privado" if privado else "microfone desligado" if not self.mic_ligado
+                                       else "sem internet" if estado.offline else f"diga \"{config.NOME}\"")
+        self.setToolTip(dica)
+        if self.acao_privado.isChecked() != privado:
+            self.acao_privado.blockSignals(True)
+            self.acao_privado.setChecked(privado)
+            self.acao_privado.blockSignals(False)
+        silencio = bool(estado.nao_perturbe_ate())
+        if self.acao_silencio.isChecked() != silencio:
+            self.acao_silencio.blockSignals(True)
+            self.acao_silencio.setChecked(silencio)
+            self.acao_silencio.blockSignals(False)
 
     def chamar(self):
         eventos.publicar({"tipo": "chamar", "interno": True})
 
+    def parar_tudo(self):
+        from . import nucleo
+
+        threading.Thread(target=nucleo.parar_tudo, daemon=True).start()
+
     def alternar_mic(self, ligado: bool):
+        self.mic_ligado = ligado
         eventos.publicar({"tipo": "mudo", "valor": not ligado, "interno": True})
         self.acao_mic.setText("Microfone ligado" if ligado else "Microfone DESLIGADO")
-        self.setIcon(icone_gema(apagada=not ligado))
+        self.pintar()
+
+    def alternar_silencio(self, ligado: bool):
+        from . import ferramentas
+
+        ferramentas.nao_perturbe(60 if ligado else 0)
+
+    def diagnostico(self):
+        from . import nucleo
+
+        nucleo.atender_em_segundo_plano("faça um diagnóstico")
 
     # ---------------- vozes
     def cadastrar(self, nome: str, nivel: str):
@@ -166,7 +316,7 @@ class Bandeja(QSystemTrayIcon):
         texto = "\n".join(f"• {p['nome']} — {p['nivel']}" for p in lista) or \
             "Ninguém cadastrado: ela atende qualquer voz."
         QMessageBox.information(None, config.NOME, f"{texto}\n\nModo: {config.MODO_VOZ}\n"
-                                "Para remover alguém, diga: \"Ametista, apaga a voz da Fulana\".")
+                                "Para mudar, use o painel de configurações (Pessoas).")
 
     # ---------------- celular
     def parear(self):
@@ -186,8 +336,6 @@ class Bandeja(QSystemTrayIcon):
 
     # ---------------- utilidades
     def _em_segundo_plano(self, funcao):
-        import threading
-
         def rodar():
             try:
                 msg = funcao()
@@ -198,8 +346,6 @@ class Bandeja(QSystemTrayIcon):
 
     def _console(self, modulo: str):
         """Abre uma janela de comando rodando um módulo da Ametista (ex.: publicar o app do celular)."""
-        import subprocess
-
         py = sys.executable.replace("pythonw.exe", "python.exe")
         if sys.platform == "win32":
             subprocess.Popen(f'start "Ametista" cmd /k ""{py}" -m ametista.{modulo}"', shell=True,
@@ -243,6 +389,10 @@ class DialogoQR(QDialog):
         return pix
 
 
+def abrir_painel() -> None:
+    webbrowser.open(f"http://127.0.0.1:{config.PORTA}/painel")
+
+
 def _porta_ocupada() -> bool:
     with socket.socket() as s:
         s.settimeout(0.3)
@@ -255,7 +405,24 @@ def _esperar_servidor(limite: float = 20) -> None:
         time.sleep(0.1)
 
 
+def reiniciar_processo(app: QApplication) -> None:
+    """Abre uma Ametista nova (que espera esta fechar) e fecha esta."""
+    principal = sys.modules.get("__main__")
+    if getattr(principal, "__spec__", None) is not None:  # python -m ametista
+        cmd = [sys.executable, "-m", "ametista"] + sys.argv[1:]
+    else:                                                # ametista.pyw
+        cmd = [sys.executable] + sys.argv
+    env = {**os.environ, "AMETISTA_REINICIO": "1"}
+    flags = 0x00000008 if sys.platform == "win32" else 0  # DETACHED_PROCESS
+    subprocess.Popen(cmd, cwd=str(config.RAIZ), env=env, creationflags=flags)
+    app.quit()
+
+
 def main() -> int:
+    if os.environ.pop("AMETISTA_REINICIO", None):  # reinício pelo painel: espera a anterior sair
+        fim = time.time() + 20
+        while _porta_ocupada() and time.time() < fim:
+            time.sleep(0.3)
     # Instância única: se já estiver rodando, só chama a que existe
     if _porta_ocupada():
         try:
@@ -276,52 +443,67 @@ def main() -> int:
     _esperar_servidor()
 
     janela = Sobreposicao()
+    apontador = Apontador()
     bandeja = Bandeja(janela, app)
     bandeja.show()
 
     # Eventos de qualquer thread -> interface
     ponte = Ponte()
     esconder_timer = QTimer(singleShot=True)
-    esconder_timer.timeout.connect(janela.hide)
-
-    estado = {"ouvido": False}
+    esconder_timer.timeout.connect(lambda: janela.hide() if janela.modo == "compacto" else None)
+    estado_ui = {"ouvido": False}
 
     def tratar(msg: dict):
         tipo = msg.get("tipo")
-        if tipo in ("acordou", "ouvindo", "transcricao", "pensando", "resposta", "alerta", "aviso", "cadastro"):
+        if tipo in ("acordou", "ouvindo", "transcricao", "pensando", "fala_inicio", "alerta", "aviso", "cadastro",
+                    "aguardando"):
             esconder_timer.stop()
             janela.aparecer(focar=bool(msg.get("manual")))
         elif tipo == "esconder":
             esconder_timer.start(50)
-        elif tipo == "chamar" and not estado["ouvido"]:  # sem microfone: abre só para digitar
+        elif tipo == "tamanho":
+            janela.mudar_modo(msg.get("modo", "compacto"))
+        elif tipo == "agente_tela":
+            janela.mudar_modo("tarefa" if msg.get("ativo") else "compacto")
+        elif tipo == "apontar":
+            apontador.mostrar(int(msg["x"]), int(msg["y"]), msg.get("rotulo", ""))
+        elif tipo == "abrir_painel":
+            abrir_painel()
+        elif tipo in ("privado", "estado"):
+            bandeja.pintar()
+        elif tipo == "reiniciar":
+            reiniciar_processo(app)
+        elif tipo == "chamar" and not estado_ui["ouvido"]:  # sem microfone: abre só para digitar
             eventos.publicar({"tipo": "acordou", "manual": True})
 
     ponte.evento.connect(tratar)
-    eventos.ouvir(lambda m: ponte.evento.emit(m) if m.get("tipo") != "mic" else None)
+    eventos.ouvir(lambda m: ponte.evento.emit(m) if m.get("tipo") not in ("mic", "fala_trecho") else None)
 
     # Ouvido (microfone offline)
     if config.OUVIDO_LIGADO:
         from .ouvido import Ouvido
 
-        estado["ouvido"] = Ouvido().iniciar()
-        if not estado["ouvido"]:
+        estado_ui["ouvido"] = Ouvido().iniciar()
+        if not estado_ui["ouvido"]:
             QTimer.singleShot(4000, lambda: eventos.publicar({
                 "tipo": "aviso", "texto": "Não achei o modelo de voz; rode o instalar.bat. Por enquanto, só digitando."}))
 
     # Celular (ponte na Cloudflare)
     nuvem.instancia().iniciar()
 
-    # Atalho global
+    # Atalhos globais
     try:
         import keyboard
 
         keyboard.add_hotkey(config.ATALHO, lambda: eventos.publicar({"tipo": "chamar", "interno": True}))
+        keyboard.add_hotkey(config.ATALHO_PARAR, bandeja.parar_tudo)
     except Exception as e:
-        print(f"[desktop] atalho {config.ATALHO} indisponível: {e}")
+        print(f"[desktop] atalhos indisponíveis: {e}")
 
     # Mostra uma vez ao iniciar, para você saber que ela está ativa
     def boas_vindas():
+        extra = " Modo privado ligado." if estado.privado() else ""
         eventos.publicar({"tipo": "aviso", "texto": f"{config.NOME} ativa. Diga \"{config.NOME}\" "
-                                                    f"ou use {config.ATALHO.replace('+', ' + ')}."})
+                                                    f"ou use {config.ATALHO.replace('+', ' + ')}.{extra}"})
     QTimer.singleShot(2500, boas_vindas)
     return app.exec()
