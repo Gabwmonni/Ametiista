@@ -36,7 +36,8 @@ Ela liga junto com o PC e fica quietinha no ícone 💎 perto do relógio.
 ## 1. Instalação (primeira vez)
 
 1. Instale o **Python 3.12** (ou 3.11) em python.org. **Marque "Add Python to PATH".**
-2. Descompacte num lugar fixo (ex.: `C:\Ametista`). Não deixe em Downloads.
+2. Descompacte direto no `C:\` (fica `C:\ametista`). **Evite Documentos, Área de Trabalho e Downloads:** no Windows 11 eles costumam ficar dentro do **OneDrive**, e o caminho fica longo demais para o Windows aceitar todos os arquivos da instalação.
+   Se esquecer, tudo bem: o `instalar.bat` percebe, explica e oferece copiar a Ametista para `C:\Ametista` e continuar de lá.
 3. Dois cliques em **`instalar.bat`**. Ele:
    - instala tudo e baixa os modelos offline (ouvir, reconhecer quem fala, transcrever e a busca por significado: cerca de 800 MB);
    - liga o "Iniciar com o Windows".
@@ -57,6 +58,8 @@ Nada do que ela aprendeu se perde: o `.env`, as vozes cadastradas, a memória e 
 3. Dois cliques em **`instalar.bat`** (instala as bibliotecas novas e baixa o modelo da busca por significado).
 4. Dois cliques em **`iniciar.bat`**.
 5. Se você usa o app do celular: dois cliques em **`publicar_celular.bat`** para atualizar o app (mesma conta e mesmo endereço; os celulares pareados continuam pareados). Depois abra o app no celular e toque em **Ativar avisos**.
+
+**Descompactou a 2.0 numa pasta nova, em vez de por cima?** Tudo bem: o `instalar.bat` acha a 1.0 (pelo "Iniciar com o Windows") e pergunta se deve trazer a memória, as vozes cadastradas e as configurações de lá. Depois, a pasta da 1.0 pode ser apagada.
 
 Na primeira vez, ela traz os fatos e lembretes da 1.0 para a memória nova (o arquivo antigo vira `dados/memoria_v1_migrada.json`).
 As configurações novas começam no padrão; confira no painel (botão direito no 💎 → **Configurações…**).

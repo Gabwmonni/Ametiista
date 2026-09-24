@@ -19,6 +19,17 @@ if not defined PY (
   exit /b 1
 )
 
+rem --- lugar da pasta: caminho curto e fora do OneDrive (senao o Windows recusa arquivos da instalacao).
+rem     Tambem traz memoria, vozes e configuracoes de uma Ametista instalada em outra pasta.
+set "ARQ_DESTINO=%TEMP%\ametista_destino.txt"
+if exist "%ARQ_DESTINO%" del "%ARQ_DESTINO%"
+%PY% -m ametista.pasta_segura "%CD%" "%ARQ_DESTINO%"
+if errorlevel 10 goto continuar_no_destino
+if errorlevel 1 (
+  pause
+  exit /b 1
+)
+
 rem --- ambiente Python proprio da Ametista (reaproveitado na atualizacao)
 if exist .venv\Scripts\python.exe (
   .venv\Scripts\python.exe -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>nul || (
@@ -73,5 +84,17 @@ if defined NOVO (
 echo   3. Cadastre a sua voz: botao direito no icone da Ametista ^> Vozes ^> Cadastrar a minha voz.
 echo   4. Algo estranho? De dois cliques em diagnostico.bat.
 echo   O resto - celular, agenda, Spotify, casa, voz clonada - esta no LEIA-ME.
+if defined AMETISTA_PASTA_ANTIGA echo.
+if defined AMETISTA_PASTA_ANTIGA echo   A Ametista agora fica em "%CD%".
+if defined AMETISTA_PASTA_ANTIGA echo   A pasta antiga nao e mais usada e pode ser apagada: "%AMETISTA_PASTA_ANTIGA%"
 echo.
 pause
+exit /b 0
+
+:continuar_no_destino
+rem a pasta foi copiada para um lugar bom: a instalacao continua de la
+set /p DESTINO=<"%ARQ_DESTINO%"
+set "AMETISTA_PASTA_ANTIGA=%CD%"
+cd /d "%DESTINO%"
+call "%DESTINO%\instalar.bat"
+exit /b %errorlevel%

@@ -106,6 +106,51 @@ jobs:
         shell: cmd
         run: C:\Ametista\.venv\Scripts\python.exe tests\checar_atualizacao.py C:\Ametista
 
+  pasta_no_onedrive:
+    # O caso real: a 1.0 instalada em outra pasta e a 2.0 descompactada num caminho longo dentro do OneDrive.
+    # O instalar.bat tem que mover para C:\Ametista, instalar lá e trazer a memória da 1.0.
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      PYTHONUTF8: "1"
+      WHISPER_MODELO: tiny
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Instalar e usar a 1.0 em C:\Ametista-v1
+        shell: pwsh
+        run: |
+          reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /f | Out-Null   # como num PC de verdade
+          git archive --format=zip -o "$env:RUNNER_TEMP\v1.zip" 77498e1
+          Expand-Archive "$env:RUNNER_TEMP\v1.zip" -DestinationPath C:\Ametista-v1
+          cmd /c "cd /d C:\Ametista-v1 && echo.| instalar.bat"
+          C:\Ametista-v1\.venv\Scripts\python.exe tests\semear_v1.py C:\Ametista-v1
+          if ($LASTEXITCODE) { exit 1 }
+      - name: Descompactar a 2.0 dentro de um OneDrive, num caminho longo
+        shell: pwsh
+        run: |
+          git archive --format=zip -o "$env:RUNNER_TEMP\v2.zip" HEAD
+          $pasta = "$env:USERPROFILE\OneDrive - Etec Centro Paula Souza\Documents\projeto-ametista-v2.0"
+          Expand-Archive "$env:RUNNER_TEMP\v2.zip" -DestinationPath $pasta
+          "PASTA_LONGA=$pasta\ametista" >> $env:GITHUB_ENV
+      - name: instalar.bat de lá
+        shell: cmd
+        env:
+          AMETISTA_INSTALAR_SEM_PERGUNTAR: "1"
+        run: |
+          cd /d "%PASTA_LONGA%"
+          echo.| instalar.bat
+      - name: Instalou em C:\Ametista, com a memória da 1.0, e liga com o Windows de lá
+        shell: cmd
+        run: |
+          if exist "%PASTA_LONGA%\.venv" (echo instalou na pasta ruim & exit /b 1)
+          C:\Ametista\.venv\Scripts\python.exe tests\checar_atualizacao.py C:\Ametista || exit /b 1
+          C:\Ametista\.venv\Scripts\python.exe -c "import winreg, sys; k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run'); v = winreg.QueryValueEx(k, 'Ametista')[0]; print(v); sys.exit('C:\\Ametista\\ametista.pyw' not in v)"
+
   celular:
     runs-on: ubuntu-latest
     timeout-minutes: 10
