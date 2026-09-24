@@ -24,6 +24,7 @@ def pc_falso(monkeypatch):
         def save(self, buf, *_a, **_k):
             buf.write(b"jpeg")
     monkeypatch.setattr(controle, "WINDOWS", True)
+    monkeypatch.setattr(controle, "janela_de_comando", lambda: "")   # na frente: um programa comum, não um terminal
     monkeypatch.setattr(controle, "capturar", lambda monitor="principal", modelo=None: (Img(), dict(geo)))
     monkeypatch.setattr(controle, "clicar", lambda x, y, botao="left", vezes=1, mods="": feito.append(("clique", x, y, botao, vezes)))
     monkeypatch.setattr(controle, "digitar", lambda t: feito.append(("digitar", t)))

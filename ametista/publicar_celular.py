@@ -37,8 +37,7 @@ def main() -> None:
         _salvar_env("NUVEM_CHAVE", chave)
         print("Chave secreta criada e salva no .env.")
 
-    if not (PASTA / "node_modules").exists():
-        _rodar("npm install --no-audit --no-fund")
+    _rodar("npm install --no-audit --no-fund")   # rápido se já estiver em dia; atualiza depois de uma versão nova
 
     # login (abre o navegador só se ainda não estiver logado)
     who = subprocess.run("npx wrangler whoami", cwd=PASTA, shell=True, capture_output=True, text=True,
