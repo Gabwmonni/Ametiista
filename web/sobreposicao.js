@@ -343,8 +343,14 @@
       if (!("speechSynthesis" in window) || !texto) return setTimeout(ok, 300);
       const u = new SpeechSynthesisUtterance(texto);
       u.lang = "pt-BR";
-      const voz = speechSynthesis.getVoices().find((v) => v.lang.startsWith("pt"));
+      // reserva (quando o áudio falha): prefere uma voz feminina em português, um pouco mais leve e calma
+      const vozes = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith("pt"));
+      const feminina = /francisca|thalita|maria|luciana|fernanda|vit[oó]ria|raquel|helena|female|mulher/i;
+      const voz = vozes.find((v) => feminina.test(v.name) && v.lang === "pt-BR") || vozes.find((v) => feminina.test(v.name))
+        || vozes.find((v) => v.lang === "pt-BR") || vozes[0];
       if (voz) u.voice = voz;
+      u.pitch = 1.08;
+      u.rate = 0.97;
       let ativo = true;
       const fim = () => { if (ativo) { ativo = false; resolverNavegador = null; ok(); } };
       resolverNavegador = fim;

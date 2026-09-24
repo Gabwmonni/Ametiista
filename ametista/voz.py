@@ -65,14 +65,26 @@ def mime_de(audio_b64: str | None) -> str:
 
 
 # ------------------------------------------------------------------ edge-tts (padrão, sem clonagem)
-async def _edge(texto: str) -> bytes | None:
+async def _edge(texto: str, voz: str | None = None, velocidade: str | None = None, tom: str | None = None) -> bytes | None:
     import edge_tts
 
     partes = bytearray()
-    async for pedaco in edge_tts.Communicate(texto, config.VOZ, rate=config.VOZ_VELOCIDADE or "+0%").stream():
+    async for pedaco in edge_tts.Communicate(texto, voz or config.VOZ, rate=velocidade or config.VOZ_VELOCIDADE or "+0%",
+                                             pitch=tom or config.VOZ_TOM or "+0Hz").stream():
         if pedaco["type"] == "audio":
             partes.extend(pedaco["data"])
     return bytes(partes) or None
+
+
+def amostra_edge(texto: str, voz: str, velocidade: str, tom: str) -> str | None:
+    """Para o painel: ouvir uma combinação de voz pronta antes de salvar (sem cache)."""
+    try:
+        audio = asyncio.run_coroutine_threadsafe(_edge(preparar_texto(texto, "edge"), voz, velocidade, tom),
+                                                 _loop_voz()).result(timeout=30)
+    except Exception as e:
+        print(f"[voz] amostra falhou: {e}")
+        return None
+    return base64.b64encode(audio).decode() if audio else None
 
 
 # ------------------------------------------------------------------ ElevenLabs (voz clonada na nuvem)
@@ -140,7 +152,7 @@ PROVEDORES = {"edge": _edge, "elevenlabs": _elevenlabs, "local": _local}
 
 
 def _chave_cache(provedor: str, texto: str) -> str:
-    voz = {"edge": f"{config.VOZ}{config.VOZ_VELOCIDADE}",
+    voz = {"edge": f"{config.VOZ}{config.VOZ_VELOCIDADE}{config.VOZ_TOM}",
            "elevenlabs": f"{config.ELEVENLABS_VOZ_ID}{config.ELEVENLABS_MODELO}", "local": "xtts"}.get(provedor, "")
     return hashlib.sha1(f"{provedor}|{voz}|{texto}".encode()).hexdigest()
 

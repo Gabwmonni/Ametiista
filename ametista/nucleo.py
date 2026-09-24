@@ -77,12 +77,13 @@ def _falar_curto(texto: str, emocao: str, origem: str, ficha) -> str:
 
 
 def atender(texto: str, falante: Falante = DONO_PADRAO, mostrar_pedido: bool = True, origem: str = "pc",
-            sem_nome: bool = False) -> dict:
+            sem_nome: bool = False, com_voz: bool = True) -> dict:
     """Bloqueante: roda numa thread de trabalho, nunca no loop do servidor.
 
     falante: quem pediu (a voz identificada). Texto digitado no PC e o celular pareado contam como o dono.
     origem: "pc" ou "celular" (a resposta do celular volta só para o celular, com o áudio inteiro).
     sem_nome: fala captada na conversa contínua, sem dizer "Ametista" (pode não ser para ela).
+    com_voz: False = o celular está com a voz desligada (economiza a geração e os dados do áudio).
     """
     texto = (texto or "").strip()
     if not texto:
@@ -108,7 +109,7 @@ def atender(texto: str, falante: Falante = DONO_PADRAO, mostrar_pedido: bool = T
         troca = memoria.nova_troca()
         token_c = ferramentas.CONTEXTO.set({"texto": texto, "troca": troca, "origem": origem, "ficha": ficha})
         try:
-            return _atender(texto, norm_limpo, falante, mostrar_pedido, origem, sem_nome, ficha, troca)
+            return _atender(texto, norm_limpo, falante, mostrar_pedido, origem, sem_nome, ficha, troca, com_voz)
         except Cancelado:
             eventos.publicar({"tipo": "cancelado", "interno": origem != "pc"})
             return {"cancelado": True}
@@ -119,7 +120,7 @@ def atender(texto: str, falante: Falante = DONO_PADRAO, mostrar_pedido: bool = T
             estado.ocupado = False
 
 
-def _atender(texto, norm, falante, mostrar_pedido, origem, sem_nome, ficha, troca) -> dict:
+def _atender(texto, norm, falante, mostrar_pedido, origem, sem_nome, ficha, troca, com_voz=True) -> dict:
     from . import proatividade
 
     quem = falante.nome if falante.nome != DONO_PADRAO.nome else ""
@@ -132,7 +133,7 @@ def _atender(texto, norm, falante, mostrar_pedido, origem, sem_nome, ficha, troc
         memoria.registrar(troca, "user", texto, falante.nome or "", origem, privado)
         memoria.registrar(troca, "assistant", resposta, "", origem, privado)
         r = {"tipo": "resposta", "texto": resposta, "emocao": emocao, "origem": "local"}
-        if origem == "celular":
+        if origem == "celular" and com_voz:
             r["audio"] = voz.sintetizar_sync(resposta)
         return r
 
@@ -185,7 +186,7 @@ def _atender(texto, norm, falante, mostrar_pedido, origem, sem_nome, ficha, troc
     memoria.registrar(troca, "assistant", falado, "", origem, privado_troca)
     resultado = {"tipo": "resposta", "texto": falado, "emocao": locutor.emocao_atual or r.get("emocao", "neutra"),
                  "origem": r.get("origem", "local"), "aguardando": bool(acoes.pendente())}
-    if origem == "celular":
+    if origem == "celular" and com_voz:
         resultado["audio"] = voz.sintetizar_sync(falado)
     return resultado
 

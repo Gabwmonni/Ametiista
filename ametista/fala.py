@@ -1,8 +1,10 @@
 """Fala em trechos: a Ametista começa a falar antes de terminar de pensar.
 
-O cérebro entrega o texto aos pedaços (streaming). O Locutor corta em frases, manda gerar o áudio de
-cada frase assim que ela fica pronta (duas ao mesmo tempo) e publica os trechos na ordem certa para a
-sobreposição tocar em sequência:
+O cérebro entrega o texto aos pedaços (streaming). O Locutor corta em trechos, manda gerar o áudio de
+cada trecho assim que ele fica pronto (dois ao mesmo tempo) e publica na ordem certa para a sobreposição
+tocar em sequência. O primeiro trecho é a primeira frase (para começar a falar logo); os seguintes
+juntam duas ou três frases, porque a voz soa bem mais natural quando a entonação não recomeça a cada
+frase:
 
     fala_inicio -> fala_trecho (seq 0) -> fala_trecho (seq 1) ... -> fala_fim
 """
@@ -19,6 +21,8 @@ _ids = itertools.count(1)
 _ABREVIACOES = {"sr", "sra", "dr", "dra", "prof", "profa", "etc", "ex", "obs", "n", "nº", "av", "eng", "arq", "pg"}
 _EMOCAO = re.compile(r"\[\s*(%s)\s*\]" % "|".join(EMOCOES), re.I)
 _FIM_FRASE = re.compile(r"[.!?…]+[\"')\]]*(?=\s)")
+TRECHO_MIN = 100     # depois da primeira frase, junta frases até ter pelo menos isso...
+TRECHO_MAX = 260     # ...sem passar disso (trecho grande demora mais para gerar)
 
 
 def _limpar_markdown(t: str) -> str:
@@ -87,13 +91,24 @@ class Locutor:
             fim_frase = _FIM_FRASE.search(antes + " ")
             if not fim_frase or fim_frase.end() >= len(antes.rstrip()):
                 return quebra + 1
+        fins = []
         for m in _FIM_FRASE.finditer(texto):
             fim = m.end()
             antes = re.findall(r"(\w+)[.]$", texto[:fim].rstrip("\"')]"))
             if antes and antes[-1].lower() in _ABREVIACOES:
                 continue
             if len(texto[:fim].strip()) >= 2:
-                return fim
+                if primeiro:
+                    return fim
+                fins.append(fim)
+        if fins:
+            cabem = [f for f in fins if f <= TRECHO_MAX]
+            if not cabem:
+                return fins[0]                       # uma frase só já passa do tamanho: vai sozinha
+            if cabem[-1] >= TRECHO_MIN or len(texto) > TRECHO_MAX:
+                return cabem[-1]                     # duas ou três frases juntas
+            if not final:
+                return -1                            # espera mais frases para juntar
         if primeiro and len(texto) > 70:  # primeira frase longa: corta na vírgula para começar logo
             m = list(re.finditer(r"[,;:](?=\s)", texto[:160]))
             if m and m[-1].end() >= 25:

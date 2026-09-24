@@ -182,3 +182,16 @@ def test_tirar_nome():
     assert ouvido.tirar_nome("Ô Ametista que horas são") == ("que horas são", True)
     assert ouvido.tirar_nome("toca Coldplay") == ("toca Coldplay", False)
     assert ouvido.PARAR_FALA.match("para") and not ouvido.PARAR_FALA.match("para o carro ali")
+
+
+def test_reconhecedor_descansa_no_silencio_e_nao_perde_o_comeco(o):
+    chamadas = []
+    original = o._vosk.AcceptWaveform
+    o._vosk.AcceptWaveform = lambda bloco: chamadas.append(bloco) or original(bloco)
+    _alimentar(o, MUDO, 100)                               # 8 s de silêncio
+    assert len(chamadas) == ouvido.BLOCOS_ATE_DESCANSAR       # depois de 1,5 s ele para de processar
+    chamadas.clear()
+    o._vosk.parcial = "ametista"
+    o.alimentar(ALTO)                                      # primeiro som: acorda com o áudio anterior
+    assert len(chamadas) == ouvido.PREROLL_ACORDAR + 1 and chamadas[-1] == ALTO
+    assert o.estado == "gravando"

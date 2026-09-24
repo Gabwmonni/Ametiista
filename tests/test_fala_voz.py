@@ -18,12 +18,28 @@ def test_corta_em_frases_e_publica_em_ordem(publicados, monkeypatch):
     texto = loc.terminar()
     assert texto == "Oi, Gabriel! São três e meia. Quer que eu toque algo?"
     trechos = _trechos(publicados)
-    assert [t["texto"] for t in trechos] == ["Oi, Gabriel!", "São três e meia.", "Quer que eu toque algo?"]
-    assert [t["seq"] for t in trechos] == [0, 1, 2]
+    # a primeira frase sai sozinha (começa a falar logo); as seguintes vão juntas (entonação natural)
+    assert [t["texto"] for t in trechos] == ["Oi, Gabriel!", "São três e meia. Quer que eu toque algo?"]
+    assert [t["seq"] for t in trechos] == [0, 1]
     assert trechos[0]["audio"] == "AUDIO:Oi, Gabriel!" and trechos[0]["emocao"] == "feliz"
     tipos = [e["tipo"] for e in publicados if e["tipo"].startswith("fala_")]
     assert tipos[0] == "fala_inicio" and tipos[-1] == "fala_fim"
-    assert _trechos(publicados, "fala_fim")[0]["total"] == 3
+    assert _trechos(publicados, "fala_fim")[0]["total"] == 2
+
+
+def test_frases_seguintes_vao_juntas_em_trechos_de_tamanho_bom(publicados):
+    frases = ["Claro!", "Amanhã vai fazer sol a manhã inteira.", "À tarde pode chover um pouco, então leva um "
+              "guarda-chuva.", "A sua reunião é às dez, na sala de sempre.", "Depois você tem almoço com a Maria.",
+              "E à noite está livre.", "Quer que eu te lembre de alguma coisa?"]
+    loc = fala.Locutor()
+    for f in frases:
+        for pedaco in (f[: len(f) // 2], f[len(f) // 2:] + " "):   # chega aos pedaços, como no streaming
+            loc.texto(pedaco)
+    loc.terminar()
+    trechos = [t["texto"] for t in _trechos(publicados)]
+    assert trechos[0] == "Claro!" and " ".join(trechos) == " ".join(frases)
+    assert all(fala.TRECHO_MIN <= len(t) <= fala.TRECHO_MAX for t in trechos[1:-1])
+    assert len(trechos) <= 4
 
 
 def test_primeira_frase_longa_corta_na_virgula(publicados):
@@ -131,3 +147,28 @@ def test_elevenlabs_so_forca_idioma_nos_modelos_que_aceitam(monkeypatch):
 def test_mime():
     assert voz.mime_de("UklGRiQAAABXQVZF") == "audio/wav"
     assert voz.mime_de("SUQzBAAAAAAA") == "audio/mpeg"
+
+
+def test_voz_pronta_usa_velocidade_e_tom(monkeypatch):
+    import asyncio
+    import sys
+    import types
+
+    usados = []
+
+    class Communicate:
+        def __init__(self, texto, voz, rate="+0%", pitch="+0Hz"):
+            usados.append((voz, rate, pitch))
+
+        async def stream(self):
+            yield {"type": "audio", "data": b"mp3"}
+
+    monkeypatch.setitem(sys.modules, "edge_tts", types.SimpleNamespace(Communicate=Communicate))
+    monkeypatch.setattr(config, "VOZ", "pt-BR-FranciscaNeural")
+    monkeypatch.setattr(config, "VOZ_VELOCIDADE", "-4%")
+    monkeypatch.setattr(config, "VOZ_TOM", "+8Hz")
+    assert asyncio.run(voz._edge("oi")) == b"mp3"
+    assert usados == [("pt-BR-FranciscaNeural", "-4%", "+8Hz")]
+    chave = voz._chave_cache("edge", "Pronto!")
+    monkeypatch.setattr(config, "VOZ_TOM", "+12Hz")
+    assert voz._chave_cache("edge", "Pronto!") != chave        # mudou o tom: não reaproveita o áudio velho

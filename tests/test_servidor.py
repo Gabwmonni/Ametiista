@@ -111,3 +111,16 @@ def test_websocket_responde_confirmacao(cliente, dono):
                 break
             time.sleep(0.02)
     assert feito == ["chrome"]
+
+
+def test_ouvir_combinacao_de_voz_antes_de_salvar(cliente, monkeypatch):
+    from ametista import voz
+
+    pedidos = []
+    monkeypatch.setattr(voz, "amostra_edge", lambda texto, v, vel, tom: pedidos.append((v, vel, tom)) or "SUQzAAAA")
+    r = cliente.post("/api/testar-voz", json={"provedor": "edge", "voz": "pt-BR-ThalitaMultilingualNeural",
+                                               "velocidade": "-4%", "tom": "+12Hz"})
+    assert r.status_code == 200 and r.json()["audio"] == "SUQzAAAA"
+    assert pedidos == [("pt-BR-ThalitaMultilingualNeural", "-4%", "+12Hz")]
+    ruim = cliente.post("/api/testar-voz", json={"provedor": "edge", "voz": "x; rm -rf", "tom": "+8Hz"})
+    assert ruim.status_code == 400

@@ -10,7 +10,9 @@
 import { DurableObject } from "cloudflare:workers";
 import { enviarPush, gerarVapid } from "./push.js";
 
-const ONLINE_SEM_SINAL_MS = 90_000; // sem notícias do PC há 90 s = desligado/sem internet
+// Sem notícias do PC há 5 min = desligado/sem internet. Com o app aberto o PC manda status a cada 30 s;
+// sem ninguém olhando, só um "estou vivo" a cada 4 min (economia de dados e de processamento).
+const ONLINE_SEM_SINAL_MS = 300_000;
 
 export default {
   async fetch(req, env) {
@@ -162,7 +164,7 @@ export class Rele extends DurableObject {
   }
 
   // ---------------------------------------------------------------- estado do PC
-  async estado() {
+  async estado(comNotificacoes = false) {
     const pc = (await this.ctx.storage.get("pc")) || {};
     const conectado = this.ctx.getWebSockets("pc").length > 0;
     const online = conectado && Date.now() - (pc.ultimo || 0) < ONLINE_SEM_SINAL_MS;
@@ -172,8 +174,15 @@ export class Rele extends DurableObject {
       conectado_desde: pc.conectado_desde || null,
       ultimo: pc.ultimo || null,
       info: pc.info || {},
-      notificacoes: ((await this.ctx.storage.get("notificacoes")) || []).slice(-20),
+      // os avisos antigos só vão quando o celular conecta (os novos chegam na hora, um por um)
+      ...(comNotificacoes ? { notificacoes: ((await this.ctx.storage.get("notificacoes")) || []).slice(-20) } : {}),
     };
+  }
+
+  // quantos celulares estão com o app aberto: o PC só manda o status completo quando alguém está olhando
+  avisarPCQuemOlha(saindo = null) {
+    const n = this.ctx.getWebSockets("cel").filter((w) => w !== saindo).length;
+    this.paraPC({ tipo: "celulares", celulares: n });
   }
 
   async avisarCelulares() {
@@ -197,6 +206,7 @@ export class Rele extends DurableObject {
       pc.conectado_desde = Date.now();
       pc.ultimo = Date.now();
       await this.ctx.storage.put("pc", pc);
+      servidor.send(JSON.stringify({ tipo: "rele", versao: 2, celulares: this.ctx.getWebSockets("cel").length }));
       await this.avisarCelulares();
     } else if (papel === "celular") {
       const cel = await this.celularValido(this.tokenDe(req, url));
@@ -204,7 +214,8 @@ export class Rele extends DurableObject {
       const id = aleatorio(9);
       this.ctx.acceptWebSocket(servidor, ["cel", "cel:" + id]);
       servidor.serializeAttachment({ id, nome: cel.nome, hash: cel.hash });
-      servidor.send(JSON.stringify({ tipo: "estado", ...(await this.estado()) }));
+      servidor.send(JSON.stringify({ tipo: "estado", ...(await this.estado(true)) }));
+      this.avisarPCQuemOlha();
     } else {
       return json({ erro: "papel inválido" }, 400);
     }
@@ -236,6 +247,9 @@ export class Rele extends DurableObject {
     const pc = (await this.ctx.storage.get("pc")) || {};
     pc.ultimo = Date.now();
     switch (msg.tipo) {
+      case "vivo":   // sem ninguém olhando: só marca que o PC continua ligado
+        await this.ctx.storage.put("pc", pc);
+        return;
       case "ola":
         pc.ligado_desde = msg.ligado_desde || null;
         pc.info = msg.info || {};
@@ -295,6 +309,7 @@ export class Rele extends DurableObject {
   }
 
   async webSocketClose(ws) {
+    if (this.ctx.getTags(ws).includes("cel")) this.avisarPCQuemOlha(ws);
     if (this.ctx.getTags(ws).includes("pc")) {
       const pc = (await this.ctx.storage.get("pc")) || {};
       pc.ultimo = Date.now();

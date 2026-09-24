@@ -8,6 +8,7 @@ com ele):
   - o WebSocket confere a origem e a mesma chave.
 """
 import asyncio
+import re
 import base64
 import io
 import secrets
@@ -251,10 +252,25 @@ async def api_vozes():
     return {"vozes": _vozes_cache}
 
 
+_VOZ_OK = re.compile(r"^[a-z]{2}-[A-Z]{2}-[A-Za-z]+Neural$")
+
+
 @app.post("/api/testar-voz")
 async def testar_voz(request: Request):
-    texto = ((await request.json()).get("texto") or f"Oi, {config.DONO}! É assim que eu falo.")[:300]
-    audio = await asyncio.to_thread(voz.sintetizar_sync, texto)
+    """Ouve a voz. Com voz/velocidade/tom (vindos do painel, ainda sem salvar), ouve a combinação escolhida."""
+    corpo = await request.json()
+    texto = (corpo.get("texto") or f"Oi, {config.DONO}! Que bom te ouvir. Se precisar de alguma coisa, é só "
+                                    "me chamar, tá bom?")[:300]
+    previa = {k: str(corpo[k]) for k in ("voz", "velocidade", "tom") if corpo.get(k)}
+    if previa and (corpo.get("provedor") or config.VOZ_PROVEDOR) == "edge":
+        voz_id = previa.get("voz", config.VOZ)
+        vel = previa.get("velocidade", config.VOZ_VELOCIDADE)
+        tom = previa.get("tom", config.VOZ_TOM)
+        if not (_VOZ_OK.match(voz_id) and re.fullmatch(r"[+-]\d{1,2}%", vel) and re.fullmatch(r"[+-]\d{1,2}Hz", tom)):
+            return JSONResponse({"erro": "combinação de voz inválida"}, status_code=400)
+        audio = await asyncio.to_thread(voz.amostra_edge, texto, voz_id, vel, tom)
+    else:
+        audio = await asyncio.to_thread(voz.sintetizar_sync, texto)
     return {"audio": audio, "mime": voz.mime_de(audio)}
 
 

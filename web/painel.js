@@ -212,11 +212,17 @@
       el("div", { class: "controle" }, q, el("button", { class: "secundario", texto: "Buscar", onclick: buscar }), resultados));
   }
 
+  // Ouve a combinação escolhida na tela (voz pronta, velocidade e tom), mesmo antes de salvar
   async function testarVoz() {
-    if (Object.keys(alterados).some((k) => k.startsWith("AMETISTA_VOZ") || k.startsWith("VOZ_") || k.startsWith("ELEVENLABS")))
-      toast("Salve antes para ouvir a voz nova.");
-    const d = await tentar(() => api("/api/testar-voz", {}));
-    if (d) tocar(d.audio, d.mime);
+    const valor = (chave) => { const e = document.getElementById("c_" + chave); return e ? e.value : undefined; };
+    const provedor = valor("VOZ_PROVEDOR");
+    if (provedor && provedor !== "edge" && Object.keys(alterados).some((k) => k.startsWith("ELEVENLABS") || k === "VOZ_PROVEDOR"))
+      toast("Salve antes para ouvir a voz clonada.");
+    const corpo = provedor === "edge" || !provedor
+      ? { provedor: "edge", voz: valor("AMETISTA_VOZ"), velocidade: valor("VOZ_VELOCIDADE"), tom: valor("VOZ_TOM") } : {};
+    const d = await tentar(() => api("/api/testar-voz", corpo));
+    if (d && d.audio) tocar(d.audio, d.mime);
+    else if (d) toast("Não consegui gerar a voz agora (sem internet?).", true);
   }
 
   function extraCerebro() {
@@ -232,7 +238,7 @@
 
   function extraVoz() {
     conteudo.append(el("div", { class: "cartao" }, el("div", { class: "linha" },
-      el("div", { class: "cresce" }, "Ouvir a voz atual (depois de salvar)."),
+      el("div", { class: "cresce" }, "Ouvir como ela fica com o que está escolhido acima (antes de salvar)."),
       el("button", { class: "secundario", texto: "Ouvir", onclick: testarVoz }))));
   }
 

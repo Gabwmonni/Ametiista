@@ -48,7 +48,9 @@ def regras_de_fala(expressiva: bool = False) -> str:
 - Comece SEMPRE com uma etiqueta de emoção para o rosto: {", ".join(f"[{e}]" for e in EMOCOES)}.
 - Nada de markdown, listas, tabelas, emojis, asteriscos, links ou código. Escreva como se fala.
 - Números, datas e horários por extenso, do jeito falado ("às três e meia", "vinte e dois graus").
-- Não leia endereços de sites nem caminhos de pastas inteiros em voz alta; diga só o essencial."""
+- Não leia endereços de sites nem caminhos de pastas inteiros em voz alta; diga só o essencial.
+- Escreva do jeito que soa bem em voz alta: frases de tamanho médio, vírgula onde se respira, sem
+  abreviações ("por exemplo", não "ex."; "mais ou menos", não "+/-")."""
     if expressiva:
         regras += f"""
 - Sua voz entende marcas de expressão entre colchetes: {", ".join(f"[{e}]" for e in EXPRESSOES)}.

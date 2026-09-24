@@ -64,6 +64,13 @@ try:
             falhar("não recebi a resposta falada")
         print("resposta:", trecho["texto"], "| áudio:", "sim" if trecho["audio"] else "voz do sistema")
         assert trecho["texto"].startswith("São ")
+        assert trecho["audio"], "a voz padrão (Francisca, calma, tom leve) não gerou áudio"
+    # o painel ouve uma combinação ainda não salva (voz, velocidade e tom)
+    for voz_id, tom in (("pt-BR-FranciscaNeural", "+8Hz"), ("pt-BR-ThalitaMultilingualNeural", "+16Hz")):
+        r = httpx.post(BASE + "/api/testar-voz", headers={"X-Ametista-Token": token}, timeout=60,
+                       json={"provedor": "edge", "voz": voz_id, "velocidade": "-4%", "tom": tom}).json()
+        assert r.get("audio") and len(r["audio"]) > 5000, f"prévia da voz {voz_id} {tom} falhou"
+        print(f"prévia {voz_id} {tom}: {len(r['audio']) * 3 // 4 // 1024} KB de áudio")
     time.sleep(3)
     if proc.poll() is not None:
         falhar("o app caiu depois de responder")

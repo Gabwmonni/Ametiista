@@ -21,7 +21,7 @@ Ela liga junto com o PC e fica quietinha no ícone 💎 perto do relógio.
 |---|---|
 | Conversa | Fala em trechos (começa a responder antes de terminar de pensar), interrupção por voz, conversa contínua, "obrigado" encerra |
 | Cérebro | Escolhe sozinha entre o modelo rápido e o forte; reserva automática se o modelo forte estiver sobrecarregado |
-| Voz | Voz expressiva (risadas, suspiros, pausas) com a ElevenLabs v3; velocidade ajustável |
+| Voz | Mais leve, calma e acolhedora por padrão; tom e velocidade ajustáveis com prévia antes de salvar; fala em trechos com entonação contínua; voz expressiva (risadas, suspiros, pausas) com a ElevenLabs v3 |
 | Personalidade | Documento editável `IDENTIDADE_DA_AMETISTA.md` |
 | Memória | Histórico de conversas com busca ("o que eu te pedi ontem?"), caderno pessoal, busca por significado, "não guarde isso" |
 | Segurança | Botão **parar tudo**, histórico de ações com **desfazer**, níveis de confirmação, **modo privado**, diagnóstico |
@@ -29,7 +29,7 @@ Ela liga junto com o PC e fica quietinha no ícone 💎 perto do relógio.
 | Agente | Tarefas de vários passos com plano, barra de progresso e cancelamento |
 | Rotinas e avisos | Rotinas, resumo do dia, lembretes recorrentes e por condição, aniversários, iniciativa com limite por hora |
 | Interface | Rosto com novos estados e movimentos de cabeça, barra expansível (conversa, tarefas, avisos, histórico), **painel de configurações** |
-| Celular | Avisos com o app fechado (push), atalhos no ícone, parar tudo, confirmar pelo celular |
+| Celular | Avisos com o app fechado (push), atalhos no ícone, parar tudo, confirmar pelo celular, respostas só em texto (🔇), abre na hora e gasta pouca bateria e dados |
 
 ---
 
@@ -258,7 +258,20 @@ O texto digitado no PC e o celular pareado contam como o dono.
 
 ---
 
-## 13. Voz clonada e voz expressiva 🎙️
+## 13. A voz dela 🎙️
+
+**Voz pronta (grátis, padrão):** Francisca, calma e com o tom um pouco mais leve, acolhedora sem ficar infantil.
+No painel (**Voz**) dá para ajustar:
+
+- **Voz pronta:** Francisca (leve e clara) ou Thalita (mais grave e muito natural; combine com um tom mais leve);
+- **Velocidade:** de "bem devagar" a "rápida" (padrão: calma e atenciosa);
+- **Tom:** de "mais grave" a "bem leve" (padrão: leve e acolhedora).
+
+Toque em **Ouvir** para escutar a combinação escolhida **antes de salvar**, e compare à vontade.
+
+Ela fala a primeira frase sozinha, para começar rápido, e junta as seguintes em trechos de duas ou três frases, para a entonação não recomeçar a cada frase.
+
+### Voz clonada e voz expressiva
 
 > **Só clone a voz de alguém com autorização dessa pessoa.**
 
@@ -275,7 +288,6 @@ O texto digitado no PC e o celular pareado contam como o dono.
 O script cria a voz, salva tudo no `.env` e gera um `voz\teste.mp3` para você ouvir.
 
 - **Voz expressiva:** com o modelo **ElevenLabs v3** (painel → Voz), ela ri, suspira e faz pausas de verdade. Nas outras vozes essas marcas são removidas.
-- **Velocidade:** painel → Voz (vale para as vozes prontas).
 - Se a voz clonada falhar (sem internet, por exemplo), ela usa a voz padrão para não ficar muda.
 
 ---
@@ -289,13 +301,23 @@ O app mostra **se o PC está ligado, desde quando** ou **quando foi visto pela �
 - acompanhar a **tarefa** do modo agente e responder **Sim/Não** às confirmações;
 - **⏹ Parar tudo** e ligar o **modo privado**;
 - receber **avisos com o app fechado**: lembretes, "o jogo terminou de instalar", compromissos da agenda;
-- segurar o ícone do app para os **atalhos**: Falar, Ver tela, Parar tudo.
+- segurar o ícone do app para os **atalhos**: Falar, Ver tela, Parar tudo;
+- tocar em **🔊** para receber as respostas **só em texto (🔇)**. Aí o PC nem gera o áudio, o que economiza dados e bateria.
 
 **Como funciona:** o app fica hospedado de graça na sua conta Cloudflare. O PC abre uma conexão de saída até lá, então não precisa mexer no roteador. Tudo passa por conexão criptografada:
 
 - o PC usa uma chave secreta só dele;
 - cada celular recebe um token no pareamento;
 - os avisos com o app fechado vão criptografados: o serviço de notificações do Google ou da Apple não consegue ler.
+
+**Leve de propósito:**
+
+- o app abre na hora, com a cópia guardada no celular, mesmo sem internet;
+- com ele aberto, o PC manda o status a cada 30 s;
+- com ele fechado ou em segundo plano (depois de 20 s), o app desconecta e o PC só manda um "estou vivo" a cada 4 minutos;
+- os avisos continuam chegando por notificação;
+- o rosto só se mexe quando precisa e para quando o app some da tela;
+- a conversa na tela guarda só as últimas 120 mensagens.
 
 **Publicar (uma vez, e de novo a cada versão nova):**
 
@@ -404,6 +426,7 @@ Ela confere internet, Claude, Ollama, microfone, reconhecimento de voz, tempo da
 | Transcrição lenta | Ouvido → Precisão: Rápida. Com NVIDIA: Transcrever com: Placa NVIDIA |
 | Responde conversa que não era para ela | Ouvido → Minutos de conversa contínua: 1 (0 desliga) |
 | Ela me interrompe sozinha / se interrompe | Ouvido → Interromper pela voz: desligado |
+| Voz fina ou grossa demais, rápida ou lenta demais | Voz → Tom e Velocidade (toque em Ouvir para comparar antes de salvar) |
 | Fala demais sozinha | Proatividade → nível 1 ou 0 |
 | Gasta demais | Cérebro → Modelo para pedidos difíceis: Sonnet 5, ou desligue a escolha automática |
 | Não quero mostrar a janela aberta no celular | Celular → Mostrar a janela aberta: desligado |
@@ -412,7 +435,14 @@ Tudo isso também está no `.env` (o `.env.example` explica cada linha).
 
 ---
 
-## 19. Limites de hoje (honestamente)
+## 19. Leve para o PC
+
+- **Rosto:** 30 quadros por segundo falando, 10 parada, 8 dormindo, e **zero** quando a barra está escondida.
+- **Palavra de ativação:** o reconhecedor descansa depois de 1,5 s de silêncio. No primeiro som ele volta, com o meio segundo anterior, para não perder o começo do "Ametista".
+- **Busca por significado:** o modelo carrega em segundo plano e nunca atrasa uma resposta.
+- **Celular:** sem ninguém olhando, nada de status, Spotify ou medição do PC.
+
+## 20. Limites de hoje (honestamente)
 
 - **Balão flutuante no celular** por cima de outros apps: precisa de um app nativo (Android), fora do escopo de um app web. No celular ela funciona como app e com avisos.
 - Ela **não liga** o PC que estiver desligado. Isso é possível no futuro com Wake-on-LAN e um aparelho que fique ligado em casa.
@@ -423,7 +453,7 @@ Tudo isso também está no `.env` (o `.env.example` explica cada linha).
 
 ---
 
-## 20. Estrutura
+## 21. Estrutura
 
 ```
 IDENTIDADE_DA_AMETISTA.md  a personalidade dela (editável)

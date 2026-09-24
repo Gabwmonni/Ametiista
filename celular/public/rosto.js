@@ -1,5 +1,8 @@
 // Rosto da Ametista: olhos e boca desenhados em canvas, com emoções, estados, cabeça e sincronia labial.
 //
+// Leve de propósito: só redesenha o necessário (30 quadros/s falando ou em movimento, 10 parada, 8 dormindo)
+// e para de vez quando a janela ou o app estão escondidos.
+//
 // Estados (Rosto.modo):  dormindo | ocioso | ouvindo | pensando | falando |
 //                        executando | alerta | offline | aguardando | privado
 // Gestos (Rosto.gesto):  acenar (sim com a cabeça) | negar | inclinar
@@ -146,15 +149,27 @@
     ctx.strokeStyle = rgb(estado.cor.olho);
     ctx.fillStyle = rgb(estado.cor.olho);
     ctx.lineCap = "round";
-    ctx.lineWidth = Math.max(3, S * 0.012);
-    ctx.shadowColor = rgb(estado.cor.halo, 0.8);
-    ctx.shadowBlur = 14;
+    const traco = Math.max(3, S * 0.012);
+    ctx.lineWidth = traco;
     const m = estado.modo;
+    // brilho: o mesmo traço, largo e translúcido, por baixo (bem mais barato que sombra desfocada)
+    const comBrilho = (desenhar) => {
+      ctx.save();
+      ctx.globalAlpha = 0.28;
+      ctx.strokeStyle = ctx.fillStyle = rgb(estado.cor.halo);
+      ctx.lineWidth = traco * 3.2;
+      desenhar(true);
+      ctx.restore();
+      desenhar(false);
+    };
 
     if (m === "falando") {
       const abre = S * 0.012 + estado.voz * S * 0.075;
-      retanguloArredondado(cx - larg / 2, cy - abre / 2, larg, abre, Math.min(abre, larg) / 2);
-      ctx.fill();
+      comBrilho((brilho) => {
+        const f = brilho ? traco * 1.1 : 0;
+        retanguloArredondado(cx - larg / 2 - f, cy - abre / 2 - f, larg + 2 * f, abre + 2 * f, (Math.min(abre, larg) + 2 * f) / 2);
+        ctx.fill();
+      });
     } else if (m === "pensando") {
       for (let i = 0; i < 3; i++) {
         const a = Math.sin(t * 5 - i * 0.8) * 0.5 + 0.5;
@@ -173,22 +188,27 @@
       }
       ctx.stroke();
     } else if (m === "alerta" || (m !== "dormindo" && estado.emocao === "surpresa")) {
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, S * 0.022, S * 0.03, 0, 0, 6.29);
-      ctx.stroke();
+      comBrilho(() => {
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, S * 0.022, S * 0.03, 0, 0, 6.29);
+        ctx.stroke();
+      });
     } else if (m === "aguardando") {  // boquinha de lado, esperando resposta
-      ctx.beginPath();
-      ctx.moveTo(cx - larg * 0.3, cy + S * 0.004);
-      ctx.quadraticCurveTo(cx + larg * 0.1, cy + S * 0.012, cx + larg * 0.35, cy - S * 0.006);
-      ctx.stroke();
+      comBrilho(() => {
+        ctx.beginPath();
+        ctx.moveTo(cx - larg * 0.3, cy + S * 0.004);
+        ctx.quadraticCurveTo(cx + larg * 0.1, cy + S * 0.012, cx + larg * 0.35, cy - S * 0.006);
+        ctx.stroke();
+      });
     } else {
       const curva = p.boca * S * 0.05;
-      ctx.beginPath();
-      ctx.moveTo(cx - larg / 2, cy);
-      ctx.quadraticCurveTo(cx, cy + curva, cx + larg / 2, cy);
-      ctx.stroke();
+      comBrilho(() => {
+        ctx.beginPath();
+        ctx.moveTo(cx - larg / 2, cy);
+        ctx.quadraticCurveTo(cx, cy + curva, cx + larg / 2, cy);
+        ctx.stroke();
+      });
     }
-    ctx.shadowBlur = 0;
   }
 
   function desenharExtras(cx, cy, S, sep, w, t) {
@@ -262,9 +282,35 @@
     estado.cabeca.dy = estado.gesto ? dy : lerp(estado.cabeca.dy, dy, k);
   }
 
-  let ultimo = performance.now();
+  // ---------------------------------------------------------------- quadros por segundo (economia)
+  const QPS = { falando: 30, ouvindo: 30, alerta: 30, pensando: 20, executando: 20, aguardando: 20,
+                ocioso: 10, offline: 10, dormindo: 8, privado: 8 };
+  const QPS_MOVIMENTO = 30;
+  let ultimo = performance.now(), ultimoDesenho = 0, turboAte = 0, espera = null, pedido = 0;
+
+  function movimento(segundos) {  // piscada, olhar, troca de emoção: fica suave por um instante
+    turboAte = Math.max(turboAte, performance.now() + segundos * 1000);
+    acordar();
+  }
+  function agendar() {
+    if (espera !== null || pedido || document.hidden) return;
+    const qps = performance.now() < turboAte ? QPS_MOVIMENTO : (QPS[estado.modo] || 10);
+    const falta = 1000 / qps - (performance.now() - ultimoDesenho);
+    if (falta <= 8) pedido = requestAnimationFrame(quadro);
+    else espera = setTimeout(() => { espera = null; pedido = requestAnimationFrame(quadro); }, falta);
+  }
+  function acordar() {  // algo mudou: não espera o próximo quadro lento
+    if (espera !== null) { clearTimeout(espera); espera = null; }
+    agendar();
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) { ultimo = performance.now(); acordar(); }
+  });
+
   function quadro(agora) {
-    const dt = Math.min((agora - ultimo) / 1000, 0.05);
+    pedido = 0;
+    ultimoDesenho = performance.now();   // o relógio de agora (o do quadro pode estar um quadro atrás)
+    const dt = Math.min((agora - ultimo) / 1000, 0.25);
     ultimo = agora;
     const t = agora / 1000;
     const m = estado.modo;
@@ -283,6 +329,7 @@
     if (estado.proxPiscada <= 0 && m !== "dormindo" && m !== "privado") {
       estado.piscar = 1;
       estado.proxPiscada = 2.5 + Math.random() * 4;
+      movimento(0.25);
     }
     estado.piscar = Math.max(0, estado.piscar - dt * 7);
 
@@ -291,10 +338,11 @@
     if (m === "pensando") estado.alvoOlhar = { x: 0.5, y: -0.55 };
     else if (m === "ouvindo" || m === "aguardando" || m === "alerta") estado.alvoOlhar = { x: 0, y: 0 };
     else if (m === "executando") estado.alvoOlhar = { x: Math.sin(t * 1.3) * 0.7, y: 0.25 };
-    else if (estado.proxOlhar <= 0) {
+    else if (estado.proxOlhar <= 0 && m !== "dormindo" && m !== "privado") {   // de olhos fechados não olha em volta
       estado.alvoOlhar = Math.random() < 0.45 ? { x: 0, y: 0 }
         : { x: (Math.random() - 0.5) * 1.2, y: (Math.random() - 0.5) * 0.6 };
       estado.proxOlhar = 1.2 + Math.random() * 3;
+      movimento(0.45);
     }
     estado.olhar.x = lerp(estado.olhar.x, estado.alvoOlhar.x, 1 - Math.pow(0.0005, dt));
     estado.olhar.y = lerp(estado.olhar.y, estado.alvoOlhar.y, 1 - Math.pow(0.0005, dt));
@@ -354,31 +402,42 @@
       c.rotate(cab.rot);
       c.translate(-cx, -(cy + S * 0.05));
     };
+    // só a região dos olhos (com folga para cabeça, olhar e escala) passa pela camada separada
+    const folga = S * 0.12;
+    const rx = Math.max(0, Math.floor((cx - sep - w - folga) * dpr));
+    const ry = Math.max(0, Math.floor((cy - h * 0.8 - folga) * dpr));
+    const rw = Math.min(camada.width - rx, Math.ceil((2 * (sep + w + folga)) * dpr));
+    const rh = Math.min(camada.height - ry, Math.ceil((h * 1.6 + 2 * folga) * dpr));
     cc.setTransform(1, 0, 0, 1, 0, 0);
-    cc.clearRect(0, 0, camada.width, camada.height);
+    cc.clearRect(rx, ry, rw, rh);
     girar(cc);
     girar(ctx);
     desenharOlho(cx - sep + ox, cy + oy, w, h, -1, p);
     desenharOlho(cx + sep + ox, cy + oy, w, h, 1, p);
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(camada, 0, 0);
-    ctx.restore();
+    if (rw > 0 && rh > 0) {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.drawImage(camada, rx, ry, rw, rh, rx, ry, rw, rh);
+      ctx.restore();
+    }
     girar(ctx);
     desenharBoca(cx + ox * 0.6, cy + h * 0.5 + S * 0.1 + oy * 0.5, S, p, t);
     desenharExtras(cx, cy + oy, S, sep, w, t);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    requestAnimationFrame(quadro);
+    agendar();
   }
-  requestAnimationFrame(quadro);
+  agendar();
 
   window.Rosto = {
-    modo(m) { estado.modo = m; },
-    emocao(e) { estado.emocao = EMOCOES[e] ? e : "neutra"; },
+    modo(m) { if (m !== estado.modo) { estado.modo = m; movimento(0.8); } },
+    emocao(e) {
+      const nova = EMOCOES[e] ? e : "neutra";
+      if (nova !== estado.emocao) { estado.emocao = nova; movimento(0.8); }
+    },
     voz(v) { estado.voz = v; },
     mic(v) { estado.mic = v; },
-    gesto(g) { estado.gesto = g; estado.gestoT = performance.now() / 1000; },
+    gesto(g) { estado.gesto = g; estado.gestoT = performance.now() / 1000; movimento(1); },
     get estado() { return estado; },
   };
 })();

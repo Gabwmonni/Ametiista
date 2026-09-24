@@ -1,19 +1,25 @@
-// Guarda a "casca" do app para abrir rápido (os dados sempre vêm ao vivo) e mostra os avisos
+// Guarda a "casca" do app para abrir na hora (os dados sempre vêm ao vivo) e mostra os avisos
 // que chegam por push, mesmo com o app fechado.
-const CACHE = "ametista-v2";
-const CASCA = ["/", "/index.html", "/estilo.css", "/app.js", "/rosto.js", "/manifest.webmanifest", "/icone-192.png"];
-self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CASCA))); self.skipWaiting(); });
+// A "casca" (os arquivos do app) é guardada inteira, com um nome que é a impressão digital do conteúdo:
+// o publicar_celular.bat recalcula ao publicar. Versão nova = service worker novo = casca nova de uma vez
+// (nunca mistura arquivo velho com novo). O app abre na hora, sem esperar a rede.
+const CACHE = "ametista-casca-33a951adbc";
+const CASCA = ["/", "/estilo.css", "/app.js", "/rosto.js", "/manifest.webmanifest", "/icone-192.png"];
+self.addEventListener("install", (e) => {
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CASCA.map((u) => new Request(u, { cache: "reload" })))));
+  self.skipWaiting();
+});
 self.addEventListener("activate", (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))));
   self.clients.claim();
 });
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  if (url.pathname.startsWith("/api/") || e.request.method !== "GET") return;
-  // rede primeiro (para pegar atualizações), cache se estiver sem internet
-  e.respondWith(fetch(e.request).then((r) => {
-    const copia = r.clone(); caches.open(CACHE).then((c) => c.put(e.request, copia)); return r;
-  }).catch(() => caches.match(e.request)));
+  if (url.origin !== location.origin || url.pathname.startsWith("/api/") || e.request.method !== "GET") return;
+  e.respondWith(caches.open(CACHE).then(async (c) => {
+    const alvo = e.request.mode === "navigate" ? "/" : e.request;   // /?acao=tela abre a mesma casca
+    return (await c.match(alvo, { ignoreSearch: true })) || fetch(e.request);
+  }));
 });
 
 // ------------------------------------------------------------------ push

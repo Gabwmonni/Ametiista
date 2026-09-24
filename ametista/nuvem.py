@@ -14,6 +14,9 @@ import time
 
 from . import config, eventos
 
+STATUS_S = 30  # com o app do celular aberto: status completo a cada 30 s
+VIVO_S = 240   # sem ninguém olhando, só um "estou vivo" a cada 4 min (a ponte considera 5 min)
+
 ALFABETO = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # sem 0/O, 1/I para não confundir
 
 
@@ -26,6 +29,9 @@ class Nuvem:
         self.ws = None
         self.loop: asyncio.AbstractEventLoop | None = None
         self.conectada = False
+        self.celulares = 0              # celulares com o app aberto agora (a ponte avisa)
+        self.rele_novo = False          # a ponte da 2.0 avisa quem está olhando; a antiga não
+        self._pedir_status: asyncio.Event | None = None
         eventos.ouvir(self._evento)
 
     # ------------------------------------------------------------ ciclo
@@ -52,6 +58,8 @@ class Nuvem:
                                                  max_size=8 * 1024 * 1024, ping_interval=25)
                 async with conexao as ws:
                     self.ws, self.conectada, espera = ws, True, 2
+                    self.celulares, self.rele_novo = 0, False
+                    self._pedir_status = asyncio.Event()
                     print("[nuvem] conectada ao celular")
                     await self._enviar({"tipo": "ola", "ligado_desde": self._boot_ms(), "info": self._info()})
                     status = asyncio.create_task(self._status_periodico())
@@ -60,6 +68,12 @@ class Nuvem:
                             try:
                                 msg = json.loads(bruto)
                             except ValueError:
+                                continue
+                            if msg.get("tipo") in ("rele", "celulares", "status_agora"):   # quem está olhando
+                                self.rele_novo = True
+                                self.celulares = int(msg.get("celulares", self.celulares) or 0)
+                                if self.celulares:          # alguém abriu o app: status fresco agora
+                                    self._pedir_status.set()
                                 continue
                             threading.Thread(target=self._tratar, args=(msg,), daemon=True).start()
                     finally:
@@ -87,10 +101,23 @@ class Nuvem:
             return False
 
     async def _status_periodico(self) -> None:
+        """Com o app do celular aberto: status completo a cada 30 s. Sem ninguém olhando: só um "estou vivo"
+        a cada 4 min (sem consultar Spotify nem medir o PC). Com a ponte antiga (sem aviso de quem está
+        olhando), mantém o status a cada 30 s."""
+        ultimo_vivo = time.monotonic()
         while True:
-            await asyncio.sleep(30)
-            info = await asyncio.to_thread(self._info)
-            await self._enviar({"tipo": "status", "info": info})
+            try:
+                await asyncio.wait_for(self._pedir_status.wait(), timeout=STATUS_S)
+            except asyncio.TimeoutError:
+                pass
+            self._pedir_status.clear()
+            if self.celulares > 0 or not self.rele_novo:
+                info = await asyncio.to_thread(self._info)
+                await self._enviar({"tipo": "status", "info": info})
+                ultimo_vivo = time.monotonic()
+            elif time.monotonic() - ultimo_vivo >= VIVO_S:
+                await self._enviar({"tipo": "vivo"})
+                ultimo_vivo = time.monotonic()
 
     # ------------------------------------------------------------ informações do PC
     @staticmethod
@@ -178,7 +205,7 @@ class Nuvem:
                 return
         eventos.publicar({"tipo": "aviso_celular", "texto": texto, "interno": True})
         # O celular pareado é do dono: atende com permissão total
-        r = nucleo.atender(texto, DONO_PADRAO, origem="celular")
+        r = nucleo.atender(texto, DONO_PADRAO, origem="celular", com_voz=msg.get("voz", True) is not False)
         if r.get("cancelado"):
             self.enviar({"tipo": "erro", "para": para, "id": pid, "texto": "Pedido cancelado."})
             return
@@ -198,7 +225,7 @@ class Nuvem:
         img = Image.open(io.BytesIO(base64.b64decode(cap["imagem_b64"])))
         img.thumbnail((1280, 1280))
         buf = io.BytesIO()
-        img.convert("RGB").save(buf, "JPEG", quality=70)
+        img.convert("RGB").save(buf, "JPEG", quality=62, optimize=True, progressive=True)   # leve para dados móveis
         titulo, prog = pc.janela_ativa()
         self.enviar({"tipo": "tela", "para": para, "id": pid, "imagem": base64.b64encode(buf.getvalue()).decode(),
                      "janela": f"{titulo} ({prog})" if titulo else ""})

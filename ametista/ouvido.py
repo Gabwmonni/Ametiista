@@ -24,6 +24,8 @@ TAXA = 16000
 AMOSTRAS = 1280                 # 80 ms por bloco
 DUR = AMOSTRAS / TAXA
 PREROLL = 20                    # 1,6 s de áudio antes do gatilho (inclui o próprio nome)
+BLOCOS_ATE_DESCANSAR = 19       # 1,5 s de silêncio e o reconhecedor da palavra de ativação descansa
+PREROLL_ACORDAR = 8             # ao acordar, ele recebe os 0,64 s anteriores ao primeiro som
 SILENCIO_FIM = 0.9              # segundos de silêncio que encerram o pedido
 MAX_PEDIDO = 14
 ESPERA_SEM_FALA = 5
@@ -96,6 +98,8 @@ class Ouvido:
         self.pre: deque[bytes] = deque(maxlen=PREROLL)
         self.ruido = 150.0
         self._vosk = None
+        self._quietos = 0                       # blocos seguidos em silêncio (o reconhecedor descansa)
+        self._vosk_descansando = False
         self._whisper = None
         self._whisper_pronto = threading.Event()
         self._apos_fala = "espera"
@@ -356,6 +360,21 @@ class Ouvido:
                 self.ruido = 0.97 * self.ruido + 0.03 * max(nivel, 20.0)
             if self._vosk is None:
                 return
+            # Economia: em silêncio o reconhecedor descansa. No primeiro som acima do ruído ele acorda e
+            # recebe também o meio segundo anterior, para não perder o começo do "Ametista".
+            if nivel < max(self.ruido * 1.4, 40.0):
+                self._quietos += 1
+                if self._quietos > BLOCOS_ATE_DESCANSAR:
+                    if not self._vosk_descansando:
+                        self._vosk.Reset()
+                        self._vosk_descansando = True
+                    return
+            else:
+                self._quietos = 0
+                if self._vosk_descansando:
+                    self._vosk_descansando = False
+                    for anterior in list(self.pre)[-(PREROLL_ACORDAR + 1):-1]:
+                        self._vosk.AcceptWaveform(anterior)
             if self._vosk.AcceptWaveform(bloco):
                 texto = json.loads(self._vosk.Result()).get("text", "")
             else:

@@ -2,7 +2,12 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const CHAVE_TOKEN = "ametista_token";
+  const CHAVE_VOZ = "ametista_voz";
+  const MAX_MENSAGENS = 120;        // a conversa na tela não cresce para sempre (memória do celular)
+  const PAUSAR_APOS_MS = 20_000;    // app em segundo plano há 20 s: desconecta (bateria e dados)
   let token = lerToken();
+  let vozLigada = lerVoz();
+  let pausado = false, timerPausa = null, ultimaMensagem = Date.now(), iniciado = false;
   let ws = null, estado = null, audioCtx = null, fonteAtual = null;
   let aguardando = new Map();   // id do pedido -> elemento "digitando…"
   let reconectar = 1000;
@@ -10,6 +15,7 @@
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 
   function lerToken() { try { return localStorage.getItem(CHAVE_TOKEN); } catch { return null; } }
+  function lerVoz() { try { return localStorage.getItem(CHAVE_VOZ) !== "0"; } catch { return true; } }
   function salvarToken(t) { try { t ? localStorage.setItem(CHAVE_TOKEN, t) : localStorage.removeItem(CHAVE_TOKEN); } catch {} }
 
   // ---------------------------------------------------------------- pareamento
@@ -49,9 +55,10 @@
     const proto = location.protocol === "https:" ? "wss" : "ws";
     ws = new WebSocket(`${proto}://${location.host}/api/ws?papel=celular&token=${encodeURIComponent(token)}`);
     ws.onopen = () => { reconectar = 1000; };
-    ws.onmessage = (ev) => receber(JSON.parse(ev.data));
+    ws.onmessage = (ev) => { ultimaMensagem = Date.now(); receber(JSON.parse(ev.data)); };
     ws.onclose = (ev) => {
       if (ev.code === 4001) { sair("Este celular foi desconectado pelo PC. Pareie de novo."); return; }
+      if (pausado) return;              // fechamos de propósito (app em segundo plano)
       pintarEstado(null);
       setTimeout(async () => {
         // token ainda vale? (401 = foi revogado)
@@ -125,8 +132,10 @@
     div.className = "msg " + classe;
     if (texto) div.appendChild(document.createTextNode(texto));
     if (extra) div.appendChild(extra);
-    $("conversa").appendChild(div);
-    $("conversa").scrollTop = $("conversa").scrollHeight;
+    const conversa = $("conversa");
+    conversa.appendChild(div);
+    while (conversa.childElementCount > MAX_MENSAGENS) conversa.firstElementChild.remove();
+    conversa.scrollTop = conversa.scrollHeight;
     return div;
   }
 
@@ -156,7 +165,7 @@
         Rosto.emocao(m.emocao || "neutra");
         $("confirmar").classList.toggle("oculta", !m.aguardando);
         if (m.aguardando) Rosto.modo("aguardando");
-        if (m.audio) tocar(m.audio, m.mime);
+        if (m.audio && vozLigada) tocar(m.audio, m.mime);
         break;
       }
       case "tarefa":
@@ -219,6 +228,21 @@
     enviar({ tipo: "parar_tudo", id });
     if (navigator.vibrate) navigator.vibrate(60);
   }
+
+  // Voz das respostas: desligada, o PC nem gera o áudio (economiza dados e bateria)
+  function pintarVoz() {
+    const b = $("btnVoz");
+    b.textContent = vozLigada ? "🔊" : "🔇";
+    b.setAttribute("aria-pressed", vozLigada);
+    b.title = vozLigada ? "Respostas com voz (toque para só texto)" : "Só texto (toque para ouvir as respostas)";
+  }
+  $("btnVoz").onclick = () => {
+    vozLigada = !vozLigada;
+    try { localStorage.setItem(CHAVE_VOZ, vozLigada ? "1" : "0"); } catch {}
+    if (!vozLigada && fonteAtual) try { fonteAtual.stop(); } catch {}
+    pintarVoz();
+  };
+  pintarVoz();
 
   $("btnPrivado").onclick = () => {
     if (!estado || !estado.online) return adicionar("aviso", "O PC está desligado.");
@@ -291,7 +315,7 @@
     adicionar("eu", texto).dataset.pedidoId = id;
     aguardando.set(id, digitando());
     Rosto.emocao("pensativa");
-    if (!enviar({ tipo: "pedido", id, texto })) adicionar("aviso", "Sem conexão, tentando de novo…");
+    if (!enviar({ tipo: "pedido", id, texto, voz: vozLigada })) adicionar("aviso", "Sem conexão, tentando de novo…");
   }
 
   function pedirTela() {
@@ -356,7 +380,7 @@
     adicionar("eu", "🎤 …").dataset.pedidoId = id;
     aguardando.set(id, digitando());
     Rosto.emocao("pensativa");
-    enviar({ tipo: "pedido", id, audio: b64, mime: blob.type });
+    enviar({ tipo: "pedido", id, audio: b64, mime: blob.type, voz: vozLigada });
   }
 
   btnMic.addEventListener("pointerdown", comecarGravar);
@@ -413,10 +437,28 @@
     mostrarTela("principal");
     pintarEstado(null);
     conectar();
+    if (iniciado) return;
+    iniciado = true;
     prepararAvisos().catch(() => {});
-    // confere o estado de tempos em tempos (detecta PC que caiu sem avisar)
-    setInterval(() => enviar({ tipo: "estado" }), 30_000);
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) enviar({ tipo: "estado" }); });
+    // Com o app aberto o PC manda o status sozinho a cada 30 s. Se ficar mais de 70 s sem notícia
+    // (PC caiu sem avisar), pergunta. Em segundo plano não faz nada.
+    setInterval(() => {
+      if (!document.hidden && !pausado && Date.now() - ultimaMensagem > 70_000) enviar({ tipo: "estado" });
+    }, 30_000);
+    // Em segundo plano por 20 s: desconecta (o PC para de mandar status). Os avisos continuam chegando
+    // por notificação. Ao voltar, reconecta na hora.
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        clearTimeout(timerPausa);
+        timerPausa = setTimeout(() => {
+          if (document.hidden && ws && ws.readyState <= 1) { pausado = true; ws.close(1000, "segundo plano"); }
+        }, PAUSAR_APOS_MS);
+      } else {
+        clearTimeout(timerPausa);
+        if (pausado || !ws || ws.readyState > 1) { pausado = false; conectar(); }
+        else enviar({ tipo: "estado" });
+      }
+    });
   }
 
   const doLink = new URLSearchParams(location.hash.slice(1)).get("parear");
