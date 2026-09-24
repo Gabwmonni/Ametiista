@@ -23,8 +23,14 @@ a { color: var(--ametista); }
   gap: 12px; padding: 12px 20px; background: rgba(13, 8, 22, .92); backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--borda); flex-wrap: wrap; }
 .marca { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 18px; }
-.gema { width: 16px; height: 16px; transform: rotate(45deg); border-radius: 4px;
-  background: linear-gradient(135deg, #fcc9f2, #cbb2f8 45%, #8f9df1); box-shadow: 0 0 14px #8f9df188; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; box-shadow: 0 0 0 1.5px #cbb2f8aa, 0 0 14px #8f9df155; }
+.retrato { display: flex; gap: 18px; align-items: flex-start; background: var(--cartao); border: 1px solid var(--borda);
+  border-radius: 16px; padding: 14px; margin: 4px 0 18px; }
+.retrato img { width: 190px; height: auto; border-radius: 12px; flex: none; }
+.retrato h2 { margin: 2px 0 8px; font-size: 17px; }
+.retrato p { margin: 0 0 8px; line-height: 1.5; }
+.retrato .detalhe { color: var(--fraco); font-size: 13px; }
+@media (max-width: 640px) { .retrato { flex-direction: column; } .retrato img { width: 100%; } }
 .versao { font-size: 12px; color: var(--fraco); font-weight: 400; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .chip { border: 1px solid var(--borda); background: var(--cartao); border-radius: 99px; padding: 6px 12px;

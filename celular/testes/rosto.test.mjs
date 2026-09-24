@@ -6,7 +6,7 @@ import vm from "node:vm";
 
 function carregarRosto() {
   const nada = () => {};
-  const ctx2d = new Proxy({}, { get: (_, k) => (k === "createRadialGradient" || k === "createLinearGradient")
+  const ctx2d = new Proxy({}, { get: (_, k) => (typeof k === "string" && k.endsWith("Gradient"))
     ? () => ({ addColorStop: nada }) : nada, set: () => true });
   const canvas = { dataset: { transparente: "1" }, clientWidth: 300, clientHeight: 200, width: 0, height: 0,
     getContext: () => ctx2d };
@@ -57,7 +57,7 @@ test("o brilho volta ao lilás depois de alerta e de ouvir, e a cor volta depois
   assert.ok(Rosto.estado.cinza < 0.05, `a cor volta: cinza ${Rosto.estado.cinza}`);
 });
 
-test("cabelo, pele e joias são desenhados uma vez só (não a cada quadro)", () => {
+test("a renda, as gotas e o monóculo são desenhados uma vez só (não a cada quadro)", () => {
   const { Rosto, rodar, canvas, camadas, janela } = carregarRosto();
   Rosto.modo("falando");
   Rosto.voz(0.8);

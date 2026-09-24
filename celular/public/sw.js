@@ -3,7 +3,7 @@
 // A "casca" (os arquivos do app) é guardada inteira, com um nome que é a impressão digital do conteúdo:
 // o publicar_celular.bat recalcula ao publicar. Versão nova = service worker novo = casca nova de uma vez
 // (nunca mistura arquivo velho com novo). O app abre na hora, sem esperar a rede.
-const CACHE = "ametista-casca-68873e9f6b";
+const CACHE = "ametista-casca-0c5a496518";
 const CASCA = ["/", "/estilo.css", "/app.js", "/rosto.js", "/manifest.webmanifest", "/icone-192.png"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CASCA.map((u) => new Request(u, { cache: "reload" })))));

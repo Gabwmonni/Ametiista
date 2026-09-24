@@ -327,7 +327,13 @@
   // ---------------------------------------------------------------- personalidade
   async function paginaPersonalidade() {
     conteudo.append(el("h1", { texto: "Personalidade" }),
-      el("p", { class: "sub", texto: "O documento de identidade dela. Todo cérebro (nuvem e local) lê este texto antes de responder. A mudança vale na próxima pergunta." }));
+      el("p", { class: "sub", texto: "O documento de identidade dela. Todo cérebro (nuvem e local) lê este texto antes de responder. A mudança vale na próxima pergunta." }),
+      el("div", { class: "retrato" },
+        el("img", { src: "/static/ametista.jpg", alt: "A Ametista, da ficha de personagem", width: 190, height: 289 }),
+        el("div", {},
+          el("h2", { texto: "Como ela é" }),
+          el("p", { texto: "Cabelo branco-prateado com reflexos iridescentes, preso num coque meio bagunçado; olhos azul-cristal com um brilho de estrela; um monóculo de cristal sobre o olho direito; filigranas de metal líquido com gotas de cristal sob os olhos e brincos longos de cristal." }),
+          el("p", { class: "detalhe", texto: "No rosto animado (barra do PC e celular) ficam só os olhos de cristal, o monóculo, a boca e os detalhes em metal líquido iridescente." }))));
     const d = await tentar(() => api("/api/identidade"));
     const area = el("textarea", { value: (d && d.texto) || "", spellcheck: true });
     conteudo.append(area, el("div", { class: "linha" }, el("span", { class: "cresce detalhe", texto: "Linhas que começam com > são notas para você e não vão para a IA." }),

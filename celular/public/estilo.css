@@ -27,14 +27,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding: 12px; border-radius: 14px; border: 1px solid var(--borda); background: var(--cartao); color: var(--texto); }
 #formParear button { padding: 0 18px; border-radius: 14px; border: 0; background: var(--ametista-2); font-weight: 600; }
 .erro { color: #ff9c9c; min-height: 1.4em; }
-.gema { width: 64px; height: 64px; margin: 0 auto; transform: rotate(45deg); border-radius: 14px;
-  background: linear-gradient(135deg, #fcc9f2, #cbb2f8 40%, #8f9df1 72%, #5561c2); box-shadow: 0 0 40px #8f9df188; }
+.retrato { display: block; width: 104px; height: 104px; margin: 0 auto; border-radius: 50%;
+  box-shadow: 0 0 0 2px #cbb2f8aa, 0 0 40px #8f9df166; }
 
 /* ---------- principal ---------- */
 .topo { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 8px; }
 .marca { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 18px; }
-.mini-gema { width: 14px; height: 14px; transform: rotate(45deg); border-radius: 3px;
-  background: linear-gradient(135deg, #fcc9f2, #cbb2f8 45%, #8f9df1); }
+.avatar { width: 28px; height: 28px; border-radius: 50%; box-shadow: 0 0 0 1.5px #cbb2f899; }
 .pilula { font-size: 12px; padding: 5px 11px; border-radius: 99px; border: 1px solid var(--borda); color: var(--fraco); }
 .pilula.ligado { color: var(--verde); border-color: #2d6b4f; background: #10261c; }
 .pilula.desligado { color: var(--cinza); }
