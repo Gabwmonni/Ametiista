@@ -1,0 +1,47 @@
+# Testes automáticos: rodam a cada envio de código, em Windows (onde a Ametista vive) e no celular.
+name: Testes
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12"]
+    env:
+      PYTHONUTF8: "1"
+      QT_QPA_PLATFORM: offscreen
+      QTWEBENGINE_CHROMIUM_FLAGS: "--disable-gpu --no-sandbox"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Instalar dependências (igual ao instalar.bat)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      - name: Testes
+        run: python -m pytest tests -q -rs
+      - name: Busca por significado com o modelo de verdade
+        run: python tests/checar_semantica.py
+      - name: App de desktop sobe, responde e fala
+        run: python tests/checar_desktop.py
+
+  celular:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Criptografia das notificações push
+        run: node --test celular/testes/*.test.mjs

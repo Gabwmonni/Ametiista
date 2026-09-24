@@ -1,6 +1,6 @@
 fastapi>=0.110
 uvicorn[standard]>=0.29
-anthropic>=0.40
+anthropic>=1.8,<2
 httpx>=0.27
 edge-tts>=6.1
 python-dotenv>=1.0
@@ -29,5 +29,6 @@ msal>=1.28
 # Celular
 websockets>=12
 qrcode>=7.4
-# Voz clonada no PC (opcional, pesado, melhor com placa NVIDIA):
-#   pip install coqui-tts
+# Opcionais (o instalar.bat tenta instalar à parte; se falhar, o resto funciona):
+#   pip install fastembed      -> busca por significado na memória
+#   pip install coqui-tts      -> voz clonada no próprio PC

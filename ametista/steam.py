@@ -64,7 +64,8 @@ def ler_vdf(texto: str) -> dict:
 
 def pasta_steam() -> Path | None:
     if config.STEAM_PASTA:
-        return Path(config.STEAM_PASTA)
+        p = Path(config.STEAM_PASTA)
+        return p if p.exists() else None
     if not WINDOWS:
         p = Path.home() / ".steam/steam"
         return p if p.exists() else None

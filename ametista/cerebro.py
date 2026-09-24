@@ -58,10 +58,10 @@ _RE_TIMER = re.compile(
 NEGADO = "Desculpe, isso eu só faço para quem tem permissão."
 
 
-def _ferramenta(nome: str, emocao: str = "feliz", **args) -> dict:
+def _ferramenta(ferramenta_: str, emocao: str = "feliz", **args) -> dict:
     """Executa uma ferramenta pelo mesmo caminho da IA (permissão, confirmação, registro, desfazer)."""
-    r = ferramentas.executar(nome, args)
-    texto = r if isinstance(r, str) else "Feito."
+    r = ferramentas.executar(ferramenta_, args)
+    texto = ferramentas.falavel(r) if isinstance(r, str) else "Feito."
     if texto.startswith("NEGADO"):
         return resposta(NEGADO, "local", "neutra")
     if texto.startswith("PRECISA CONFIRMAR"):

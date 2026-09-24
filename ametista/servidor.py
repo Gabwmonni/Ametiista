@@ -24,12 +24,13 @@ from . import (__version__, acoes, agente, avisos, cerebro, config, estado, even
 
 WEB = config.RAIZ / "web"
 TOKEN = secrets.token_urlsafe(24)
+PORTA = config.PORTA  # a porta em que este servidor está rodando (mudar no painel só vale depois de reiniciar)
 conexoes: set[WebSocket] = set()
 SEM_TOKEN = {"/api/chamar", "/api/saude"}
 
 
 def hosts_permitidos() -> set[str]:
-    return {f"127.0.0.1:{config.PORTA}", f"localhost:{config.PORTA}"}
+    return {f"127.0.0.1:{PORTA}", f"localhost:{PORTA}"}
 
 
 async def transmitir(msg: dict) -> None:
@@ -99,7 +100,7 @@ async def ciclo_de_vida(app: FastAPI):
     tarefas = [asyncio.create_task(t()) for t in (vigia_lembretes, vigia_agenda, faxina)]
     memoria.db()
     iniciar_servicos()
-    print(f"\n  {config.NOME} {__version__} acordou em http://127.0.0.1:{config.PORTA}")
+    print(f"\n  {config.NOME} {__version__} acordou em http://127.0.0.1:{PORTA}")
     print(f"  Nuvem (Claude): {'ativa - ' + config.CLAUDE_MODELO + ' / ' + config.CLAUDE_MODELO_FORTE if config.ANTHROPIC_API_KEY else 'sem chave'}")
     print(f"  Local (Ollama): {'disponível' if await asyncio.to_thread(cerebro.ollama_disponivel) else 'desligado'}")
     print(f"  Spotify: {'conectado' if spotify.conectado() else 'configurado' if spotify.configurado() else 'não configurado'}")
@@ -468,7 +469,7 @@ async def api_contas(qual: str):
     if qual == "spotify":
         if not spotify.configurado():
             raise HTTPException(400, "Coloque o Client ID do Spotify e salve antes.")
-        return {"url": f"http://127.0.0.1:{config.PORTA}/spotify/login"}
+        return {"url": f"http://127.0.0.1:{PORTA}/spotify/login"}
     funcoes = {"google": agenda.conectar_google, "outlook": agenda.conectar_outlook}
     if qual not in funcoes:
         raise HTTPException(404, "conta desconhecida")
@@ -594,7 +595,7 @@ def rodar_em_segundo_plano() -> threading.Thread:
     """Sobe o servidor numa thread (usado pelo app de desktop)."""
     import uvicorn
 
-    servidor = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=config.PORTA, log_level="warning"))
+    servidor = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=PORTA, log_level="warning"))
     t = threading.Thread(target=servidor.run, daemon=True, name="servidor")
     t.start()
     return t

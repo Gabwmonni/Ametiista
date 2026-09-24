@@ -17,7 +17,7 @@ import threading
 import time
 from datetime import datetime
 
-from . import acoes, config, estado, eventos, fala, ferramentas
+from . import acoes, config, estado, eventos, fala
 from .estado import Cancelado
 
 MAX_RODADAS = 80
@@ -249,6 +249,7 @@ def _executar_propria(t: Tarefa, nome: str, a: dict) -> str:
 
 # ====================================================================== laço do agente
 def _params_base(t: Tarefa) -> dict:
+    from . import ferramentas  # importado aqui: ferramentas.py também importa este módulo
     from .cerebro import ferramenta_busca_web
 
     outras = [ferramentas.POR_NOME[n] for n in FERRAMENTAS_AGENTE
@@ -292,7 +293,7 @@ def _chamar(cliente, params: dict, extras: dict):
 
 
 def _rodar(t: Tarefa) -> None:
-    from . import cerebro, identidade
+    from . import cerebro, ferramentas, identidade
 
     identidade.falante_atual.set(t.falante or identidade.DONO_PADRAO)
     token = ferramentas.CONTEXTO.set({"texto": f"tarefa: {t.objetivo}", "origem": "agente", "grupo": t.id,
