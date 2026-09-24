@@ -47,9 +47,15 @@ if args.diagnostico:
     if config.BUSCA_SEMANTICA:
         print("Carregando o modelo de busca por significado…")
         semantica.baixar()
+    diagnostico.FORA_DO_APP = True
     itens = diagnostico.executar()
     print(diagnostico.relatorio(itens))
     print("\n" + diagnostico.resumir(itens))
+    try:
+        config.DADOS.mkdir(parents=True, exist_ok=True)
+        (config.DADOS / "diagnostico.txt").write_text(diagnostico.relatorio(itens), encoding="utf-8")
+    except OSError:
+        pass
     sys.exit(0)
 
 if args.navegador:

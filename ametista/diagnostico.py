@@ -67,7 +67,16 @@ def _ouvido() -> list[dict]:
     o = ouvido.instancia()
     if not config.OUVIDO_LIGADO:
         return [_item("Microfone", AVISO, "desligado nas configurações")]
-    if o is None:
+    if o is None and FORA_DO_APP:  # diagnostico.bat: o ouvido roda no app, aqui só dá para ver as peças
+        mics = ouvido.microfones()
+        if not config.VOSK_MODELO.exists():
+            itens.append(_item("Microfone", ERRO, "modelo da palavra de ativação faltando (rode o instalar.bat)"))
+        elif not mics:
+            itens.append(_item("Microfone", ERRO, "nenhum microfone encontrado no Windows"))
+        else:
+            padrao = next((m["nome"] for m in mics if m["padrao"]), mics[0]["nome"])
+            itens.append(_item("Microfone", OK, f"{len(mics)} encontrado(s), padrão: {padrao}; modelos instalados"))
+    elif o is None:
         itens.append(_item("Microfone", ERRO, "o ouvido não iniciou (modelos faltando? rode o instalar.bat)"))
     else:
         s = o.status()
@@ -157,6 +166,8 @@ def _celular() -> dict:
 
     if not nuvem.configurada():
         return _item("App do celular", AVISO, "não publicado (opcional: publicar_celular.bat)")
+    if FORA_DO_APP:
+        return _item("App do celular", OK, f"publicado em {config.NUVEM_URL} (a conexão é conferida com a Ametista aberta)")
     n = nuvem.instancia()
     return _item("App do celular", OK if n.conectada else ERRO,
                  "PC conectado ao serviço do celular" if n.conectada else "o PC não conseguiu se conectar ao serviço")
@@ -216,9 +227,22 @@ def _erros_recentes() -> dict:
     return _item("Erros recentes", AVISO, f"{len(erros)} linha(s) de erro no log; a última: {erros[-1][:150]}")
 
 
+FORA_DO_APP = False   # True no diagnostico.bat (processo separado do app)
+
+
+def _app_aberto() -> dict:
+    import socket
+
+    with socket.socket() as sock:
+        sock.settimeout(0.3)
+        aberto = sock.connect_ex(("127.0.0.1", config.PORTA)) == 0
+    return _item("Ametista aberta", OK if aberto else AVISO,
+                 "rodando agora" if aberto else "fechada no momento (abra com o iniciar.bat)")
+
+
 def executar() -> list[dict]:
     tarefas = [_internet, _claude, _ollama, _ouvido, _voz, _contas, _casa, _celular, _memoria, _sistema,
-               _erros_recentes]
+               _erros_recentes] + ([_app_aberto] if FORA_DO_APP else [])
     itens: list[dict] = [_item("Ametista", OK, f"versão {__version__}, Python {platform.python_version()}, "
                                                f"{platform.system()} {platform.release()}")]
     with ThreadPoolExecutor(max_workers=6) as ex:
@@ -243,7 +267,8 @@ def resumir(itens: list[dict]) -> str:
         partes.append("Com problema: " + "; ".join(f"{i['item']}, {i['detalhe']}" for i in erros[:3]) + ".")
     if avisos:
         partes.append("Atenção: " + "; ".join(f"{i['item']}, {i['detalhe']}" for i in avisos[:3]) + ".")
-    partes.append("O relatório completo está no painel.")
+    if not FORA_DO_APP:
+        partes.append("O relatório completo está no painel.")
     return " ".join(partes)
 
 
@@ -269,6 +294,7 @@ def executar_e_resumir() -> str:
 
 
 if __name__ == "__main__":  # python -m ametista.diagnostico
+    FORA_DO_APP = True
     itens = executar()
     print(relatorio(itens))
     print("\n" + resumir(itens))

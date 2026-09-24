@@ -42,11 +42,33 @@ def baixar_whisper() -> None:
     print("  ok")
 
 
+def baixar_significado() -> None:
+    """Opcional: modelo da busca por significado na memória (~220 MB)."""
+    if not config.BUSCA_SEMANTICA:
+        return
+    import importlib.util
+
+    if importlib.util.find_spec("fastembed") is None:
+        print("Busca por significado: fastembed não instalado (a memória usa busca por palavras)")
+        return
+    print("Baixando modelo de busca por significado (~220 MB)...")
+    from . import semantica
+
+    print("  ok" if semantica.baixar() else "  não deu agora; ela tenta de novo sozinha quando ligar")
+
+
 if __name__ == "__main__":
-    try:
-        baixar_vosk()
-        baixar_identificacao()
-        baixar_whisper()
-    except Exception as e:
-        print(f"ERRO ao baixar modelos: {e}")
+    erros = []
+    for nome, baixar, essencial in (("palavra de ativação", baixar_vosk, True),
+                                    ("reconhecimento de quem fala", baixar_identificacao, False),
+                                    ("transcrição", baixar_whisper, True),
+                                    ("busca por significado", baixar_significado, False)):
+        try:
+            baixar()
+        except Exception as e:
+            print(f"ERRO ao baixar o modelo de {nome}: {e}")
+            if essencial:
+                erros.append(nome)
+    if erros:
+        print("Sem internet ou bloqueado? Rode o instalar.bat de novo depois (ele continua de onde parou).")
         sys.exit(1)

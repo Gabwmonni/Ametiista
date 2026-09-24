@@ -35,6 +35,38 @@ jobs:
       - name: App de desktop sobe, responde e fala
         run: python tests/checar_desktop.py
 
+  instalador:
+    # Roda o instalar.bat de verdade, como o usuário roda (com Enter no "pause" final)
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      PYTHONUTF8: "1"
+      WHISPER_MODELO: tiny          # só para o teste baixar mais rápido; o padrão continua "small"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: instalar.bat
+        shell: cmd
+        run: echo.| instalar.bat
+      - name: O que o instalador deixou pronto
+        shell: cmd
+        run: |
+          if not exist .env (echo faltou o .env & exit /b 1)
+          .venv\Scripts\python.exe -m ametista --versao || exit /b 1
+          .venv\Scripts\python.exe -c "from ametista import config as c; import sys; ok = c.VOSK_MODELO.exists() and c.MODELO_VOZ_ID.exists(); print('modelos:', ok); sys.exit(not ok)" || exit /b 1
+          .venv\Scripts\python.exe -c "from ametista import autoinicio as a; import sys; print('iniciar com o Windows:', a.ativo()); sys.exit(not a.ativo())" || exit /b 1
+          .venv\Scripts\python.exe -c "from ametista import semantica as s; import sys; print('busca por significado:', s.baixar()); sys.exit(not s.pronto())" || exit /b 1
+      - name: diagnostico.bat
+        shell: cmd
+        run: |
+          echo.| diagnostico.bat
+          type dados\diagnostico.txt
+      - name: Instalar de novo (atualização) não quebra nada
+        shell: cmd
+        run: echo.| instalar.bat
+
   celular:
     runs-on: ubuntu-latest
     timeout-minutes: 10

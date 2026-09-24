@@ -34,12 +34,13 @@ def definir(ligar: bool) -> None:
         return
     import winreg
 
-    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, CHAVE, 0, winreg.KEY_SET_VALUE) as k:
-        if ligar:
+    if ligar:  # a chave Run pode não existir num perfil novo do Windows: cria
+        with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, CHAVE, 0, winreg.KEY_SET_VALUE) as k:
             winreg.SetValueEx(k, NOME, 0, winreg.REG_SZ, _comando())
-        else:
-            try:
+    else:
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, CHAVE, 0, winreg.KEY_SET_VALUE) as k:
                 winreg.DeleteValue(k, NOME)
-            except OSError:
-                pass
+        except OSError:
+            pass  # já estava desligado
     print(f"[autoinicio] {'ligado' if ligar else 'desligado'}")

@@ -19,7 +19,7 @@ TMP = Path(tempfile.mkdtemp())
 PORTA = 8799
 BASE = f"http://127.0.0.1:{PORTA}"
 env = {**os.environ, "AMETISTA_DADOS": str(TMP / "dados"), "AMETISTA_ENV": str(TMP / ".env"), "OUVIDO_LIGADO": "0",
-       "PORTA": str(PORTA), "QT_QPA_PLATFORM": os.environ.get("QT_QPA_PLATFORM", "offscreen"), "PYTHONUTF8": "1"}
+       "PORTA": str(PORTA), "AMETISTA_SEM_PAINEL": "1", "QT_QPA_PLATFORM": os.environ.get("QT_QPA_PLATFORM", "offscreen"), "PYTHONUTF8": "1"}
 log = open(TMP / "saida.log", "w", encoding="utf-8")
 proc = subprocess.Popen([sys.executable, "-m", "ametista"], cwd=RAIZ, env=env, stdout=log, stderr=subprocess.STDOUT)
 

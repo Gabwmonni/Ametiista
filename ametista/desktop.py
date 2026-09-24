@@ -506,4 +506,8 @@ def main() -> int:
         eventos.publicar({"tipo": "aviso", "texto": f"{config.NOME} ativa. Diga \"{config.NOME}\" "
                                                     f"ou use {config.ATALHO.replace('+', ' + ')}.{extra}"})
     QTimer.singleShot(2500, boas_vindas)
+
+    # Primeira vez (sem a chave do Claude): abre o painel para configurar
+    if not config.ANTHROPIC_API_KEY and not os.environ.get("AMETISTA_SEM_PAINEL"):
+        QTimer.singleShot(3500, abrir_painel)
     return app.exec()

@@ -269,6 +269,29 @@ def salvar(novos: dict[str, str]) -> list[str]:
     return reiniciar
 
 
+def texto_exemplo() -> str:
+    """Conteúdo do .env.example, gerado a partir de CAMPOS (assim os dois nunca ficam diferentes)."""
+    linhas = ["# ===== Projeto Ametista - configurações =====",
+              "# Quase tudo aqui também muda pelo painel: botão direito no ícone da Ametista > Configurações.",
+              "# Linhas começando com # são comentários. Chave vazia = usa o padrão.", ""]
+    secao = None
+    for c in CAMPOS:
+        if c.oculto:
+            continue
+        if c.secao != secao:
+            secao = c.secao
+            if linhas[-1] != "":
+                linhas.append("")
+            linhas.append(f"# --- {secao}")
+        linhas.append(f"# {c.rotulo}." + (f" {c.ajuda}" if c.ajuda else ""))
+        if c.tipo == "bool":
+            linhas.append("#   1 = sim, 0 = não")
+        elif c.tipo == "opcao" and c.opcoes:
+            linhas += [f"#   {valor} = {rotulo}" for valor, rotulo in c.opcoes]
+        linhas.append(f"{c.chave}={_formatar(c.padrao)}")
+    return "\n".join(linhas) + "\n"
+
+
 _aplicar(_ler_env())
 
 # ---------------------------------------------------------------- caminhos e constantes derivadas

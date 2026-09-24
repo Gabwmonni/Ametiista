@@ -4,6 +4,7 @@ dados/
 modelos/
 __pycache__/
 voz/amostras/*
+!voz/amostras/.coloque_as_gravacoes_aqui
 voz/referencia/
 celular/node_modules/
 celular/.wrangler/

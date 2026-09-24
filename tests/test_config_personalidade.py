@@ -57,3 +57,19 @@ def test_documento_real_e_carregado():
     assert "Identidade da Ametista" in t and "[risada]" in t and "[feliz]" in t
     assert "Regras técnicas de fala" in personalidade.sistema_base(expressiva=False)
     assert "[risada]" not in personalidade.sistema_base(expressiva=False)
+
+
+def test_env_example_acompanha_o_esquema():
+    """O .env.example é gerado de config.CAMPOS. Se este teste falhar, rode:
+    python -c "from ametista import config; open('.env.example','w',encoding='utf-8').write(config.texto_exemplo())"
+    """
+    from pathlib import Path
+
+    from dotenv import dotenv_values
+
+    arquivo = Path(__file__).resolve().parent.parent / ".env.example"
+    assert arquivo.read_text(encoding="utf-8") == config.texto_exemplo()
+    valores = dotenv_values(arquivo)
+    for c in config.CAMPOS:
+        if not c.oculto:
+            assert valores[c.chave] == c.padrao, c.chave
