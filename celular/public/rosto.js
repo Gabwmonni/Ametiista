@@ -47,7 +47,9 @@
     voz: 0,                    // 0..1 volume da fala (boca)
     mic: 0,                    // 0..1 volume do microfone (halo)
     atual: { ...FORMA_MODO.dormindo },
-    cor: { ...PALETAS.normal },
+    // cópia de verdade (as cores mudam aos poucos; com cópia rasa a paleta original era alterada junto e o
+    // rosto não voltava mais ao lilás depois de um alerta, do modo privado ou de ficar sem internet)
+    cor: { olho: [...PALETAS.normal.olho], olho2: [...PALETAS.normal.olho2], halo: [...PALETAS.normal.halo] },
     olhar: { x: 0, y: 0 }, alvoOlhar: { x: 0, y: 0 },
     piscar: 0, proxPiscada: 2, proxOlhar: 1,
     cabeca: { rot: 0, dx: 0, dy: 0 },

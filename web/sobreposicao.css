@@ -38,6 +38,9 @@ body.navegador { background: linear-gradient(135deg, #1f3b5c, #3a2d5c 55%, #5c2d
   content: ""; position: absolute; inset: 0; border-radius: inherit; background: inherit;
   filter: blur(calc(10px + var(--nivel) * 22px)); opacity: calc(.35 + var(--nivel) * .65);
 }
+/* parada, a borda também para (economia); gira quando ela ouve, pensa, fala, trabalha ou avisa */
+.painel:not(.ouvindo):not(.pensando):not(.executando):not(.falando):not(.alerta) .borda,
+.painel:not(.ouvindo):not(.pensando):not(.executando):not(.falando):not(.alerta) .borda::after { animation-play-state: paused; }
 .painel.ouvindo .borda { opacity: 1; animation-duration: 2s; }
 .painel.pensando .borda, .painel.executando .borda { opacity: .9; animation-duration: 1.1s; }
 .painel.falando .borda { opacity: .85; }
