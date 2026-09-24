@@ -193,6 +193,7 @@ def pressionar(combinacao: str, repetir: int = 1) -> None:
     import keyboard
 
     combo = "+".join(traduzir_tecla(t) for t in combinacao.split("+") if t.strip())
+    devolver_foco()
     for _ in range(max(1, min(int(repetir), 100))):
         keyboard.send(combo)
         time.sleep(0.03)
@@ -203,6 +204,7 @@ def segurar(combinacao: str, segundos: float) -> None:
     import keyboard
 
     teclas = [traduzir_tecla(t) for t in combinacao.split("+") if t.strip()]
+    devolver_foco()
     for t in teclas:
         keyboard.press(t)
     try:
@@ -216,7 +218,50 @@ def digitar(texto: str) -> None:
     _exigir_windows()
     import keyboard
 
+    devolver_foco()
     keyboard.write(texto, delay=0.004)
+
+
+# ====================================================================== onde digitar vira comando
+# Num terminal ou na caixa Executar, texto + Enter roda um comando no PC. Por isso digitar ou apertar
+# teclas ali sempre pede um "sim" antes (vale para a IA e para o modo agente).
+TERMINAIS = {"cmd.exe", "powershell.exe", "powershell_ise.exe", "pwsh.exe", "windowsterminal.exe", "wt.exe",
+             "openconsole.exe", "conhost.exe", "bash.exe", "wsl.exe", "wslhost.exe", "mintty.exe", "putty.exe",
+             "alacritty.exe", "wezterm-gui.exe", "regedit.exe"}
+_DIALOGOS_COMANDO = {"executar", "run", "criar nova tarefa", "create new task"}
+_ATALHOS_COMANDO = ({"windows", "r"}, {"windows", "x"})
+
+
+def atalho_de_comando(combinacao: str) -> bool:
+    """win+r (Executar) e win+x (menu com Terminal/Admin): o que vem depois vira comando."""
+    teclas = {traduzir_tecla(t).lower() for t in str(combinacao).split("+") if t.strip()}
+    return any(a <= teclas for a in _ATALHOS_COMANDO)
+
+
+def janela_de_comando() -> str:
+    """'terminal' ou 'caixa Executar' se o que for digitado na janela da frente vira comando; senão ''."""
+    if not WINDOWS:
+        return ""
+    try:
+        import ctypes
+
+        import psutil
+
+        u = _user32()
+        hwnd = janela_destino()
+        if not hwnd:
+            return ""
+        programa = psutil.Process(_pid(hwnd)).name().lower()
+        classe = ctypes.create_unicode_buffer(256)
+        u.GetClassNameW(hwnd, classe, 256)
+        titulo = _titulo(hwnd).strip().lower()
+    except Exception:
+        return ""
+    if programa in TERMINAIS or classe.value == "ConsoleWindowClass":
+        return "terminal"
+    if classe.value == "#32770" and titulo in _DIALOGOS_COMANDO:
+        return "caixa Executar"
+    return ""
 
 
 # ====================================================================== janelas
@@ -239,7 +284,8 @@ def _user32():
                 ("PostMessageW", [H, w.UINT, w.WPARAM, w.LPARAM], w.BOOL), ("ShowWindow", [H, ctypes.c_int], w.BOOL),
                 ("SetForegroundWindow", [H], w.BOOL), ("GetForegroundWindow", [], H),
                 ("GetWindowThreadProcessId", [H, ctypes.POINTER(w.DWORD)], w.DWORD),
-                ("GetWindowRect", [H, ctypes.POINTER(w.RECT)], w.BOOL)):
+                ("GetWindowRect", [H, ctypes.POINTER(w.RECT)], w.BOOL),
+                ("GetClassNameW", [H, w.LPWSTR, ctypes.c_int], ctypes.c_int)):
             f = getattr(u, nome)
             f.argtypes, f.restype = args, ret
         _u32 = u
@@ -334,6 +380,32 @@ def janela_alvo(alvo: str = "") -> int | None:
     if frente and _pid(frente) != os.getpid() and any(j["hwnd"] == int(frente) for j in lista):
         return int(frente)
     return next((j["hwnd"] for j in lista if not j["minimizada"]), None)
+
+
+def janela_destino() -> int | None:
+    """A janela que vai receber o teclado: a da frente; se for a própria Ametista (a pessoa digitou o pedido
+    ou clicou em "Sim" nela), a primeira janela atrás dela."""
+    if not WINDOWS:
+        return None
+    frente = _user32().GetForegroundWindow()
+    if frente and _pid(frente) != os.getpid():
+        return int(frente)
+    return next((j["hwnd"] for j in janelas() if not j["minimizada"]), None)
+
+
+def devolver_foco() -> None:
+    """Antes de teclar: se a Ametista está em foco, devolve o foco para a janela de trás."""
+    if not WINDOWS:
+        return
+    try:
+        frente = _user32().GetForegroundWindow()
+        if frente and _pid(frente) == os.getpid():
+            destino = janela_destino()
+            if destino:
+                _focar(destino)
+                time.sleep(0.15)
+    except Exception as e:
+        print(f"[controle] não consegui devolver o foco: {e}")
 
 
 def _focar(hwnd: int) -> None:

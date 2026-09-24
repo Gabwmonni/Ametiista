@@ -81,6 +81,12 @@ class Locutor:
 
     def _achar_corte(self, texto: str, final: bool) -> int:
         primeiro = not self._partes
+        quebra = texto.find("\n")
+        if quebra >= 0:  # quebra de linha sempre fecha um trecho (fim de parágrafo, antes de uma ferramenta)
+            antes = texto[:quebra]
+            fim_frase = _FIM_FRASE.search(antes + " ")
+            if not fim_frase or fim_frase.end() >= len(antes.rstrip()):
+                return quebra + 1
         for m in _FIM_FRASE.finditer(texto):
             fim = m.end()
             antes = re.findall(r"(\w+)[.]$", texto[:fim].rstrip("\"')]"))

@@ -22,6 +22,7 @@ NAO_GUARDE = re.compile(
     r"\b(nao (guarde|guarda|grave|grava|salve|salva|anote|anota|memorize|registre|registra)( isso| essa| esse| nada|"
     r" essa conversa)?|nao (quero|precisa) que (voce )?(guarde|grave|lembre|anote)( isso)?|"
     r"isso (e|fica) (so )?entre (a gente|nos)|esquece (o que|que) eu (acabei de )?(disse|falei|contei))\b")
+DESPEDIDA_RESPONDE_ATE = 30   # segundos depois da última fala dela
 DESPEDIDA = re.compile(r"^(obrigad[oa]|muito obrigad[oa]|valeu|brigad[oa]|tchau|ate mais|ate logo|pode ir|"
                        r"era so isso|so isso|e so isso|nada nao|beleza obrigad[oa]|ok obrigad[oa])( ametista)?$")
 
@@ -156,8 +157,12 @@ def _atender(texto, norm, falante, mostrar_pedido, origem, sem_nome, ficha, troc
         privado_troca = True
         memoria.marcar_privada(troca)
 
-    # 3) despedida: encerra a conversa contínua
+    # 3) despedida: encerra a conversa contínua. Sem o nome e muito depois da última fala dela, o "valeu"
+    #    provavelmente era para outra pessoa da sala: encerra a conversa em silêncio.
     if DESPEDIDA.match(norm):
+        if sem_nome and estado.segundos_desde_que_falou() > DESPEDIDA_RESPONDE_ATE:
+            eventos.publicar({"tipo": "fim_conversa", "interno": True})
+            return {"ignorado": True}
         msg = "De nada!" if re.match(r"^(obrigad|muito obrigad|valeu|brigad|beleza|ok obrigad)", norm) else "Até mais!"
         eventos.publicar({"tipo": "fim_conversa", "interno": True})
         _falar_curto(msg, "feliz", origem, ficha)

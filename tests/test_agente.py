@@ -4,9 +4,9 @@ import time
 
 import pytest
 
-from ametista import acoes, agente, cerebro, config, controle, eventos
+from ametista import acoes, agente, cerebro, config, controle
 from ametista.identidade import DONO_PADRAO
-from falsos import ClienteFalso, Resposta, ferramenta, texto
+from falsos import ClienteFalso, Resposta, ferramenta
 
 
 @pytest.fixture
@@ -121,6 +121,29 @@ def test_pedir_confirmacao_no_meio_da_tarefa(claude, pc_falso, publicados, monke
     th.join(3)
     assert "SIM" in claude.chamadas[1]["messages"][-1]["content"][0]["content"]
     assert t.estado == "concluida"
+
+
+def test_agente_pede_sim_antes_de_digitar_no_terminal(claude, pc_falso, monkeypatch):
+    from ametista import fala
+
+    monkeypatch.setattr(fala, "falar", lambda *a, **k: "")
+    monkeypatch.setattr(controle, "janela_de_comando", lambda: "terminal")
+    respostas = iter([False, True, True])
+    perguntas = []
+    monkeypatch.setattr(acoes, "pedir_confirmacao_agente",
+                        lambda pergunta, esperar=120, ficha=None: perguntas.append(pergunta) or next(respostas))
+    t = agente.Tarefa("limpar", True, DONO_PADRAO)
+    with pytest.raises(RuntimeError, match="não autorizou"):
+        agente._acao_computador(t, "type", {"text": "rmdir /s /q C:\\obra"})
+    assert ("digitar", "rmdir /s /q C:\\obra") not in pc_falso and "terminal" in perguntas[0]
+    assert agente._acao_computador(t, "key", {"text": "Return"}) == "OK"
+    assert ("tecla", "Return") in pc_falso and len(perguntas) == 2
+
+    monkeypatch.setattr(controle, "janela_de_comando", lambda: "")
+    agente._acao_computador(t, "type", {"text": "relatorio.pdf"})       # janela comum: sem perguntar
+    assert len(perguntas) == 2
+    agente._acao_computador(t, "key", {"text": "super+r"})             # abrir o Executar: pergunta
+    assert len(perguntas) == 3
 
 
 def test_cancelar_tarefa(claude, pc_falso):

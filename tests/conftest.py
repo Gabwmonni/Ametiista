@@ -40,6 +40,7 @@ def isolamento(monkeypatch):
     acoes._pendente = None
     estado._persistente.clear()
     estado.offline = estado.ocupado = estado.falando = False
+    estado._fim_da_fala = 0.0
     estado._fichas.clear()
     proatividade._historico.clear()
     proatividade._por_chave.clear()

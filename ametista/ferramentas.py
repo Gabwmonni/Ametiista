@@ -568,7 +568,8 @@ def executar(nome: str, argumentos: dict, **extra) -> str | list:
     ctx = {**CONTEXTO.get(), **extra}
     resultado = acoes.executar(nome, argumentos or {}, funcao, origem=ctx.get("origem", "pc"),
                                motivo=ctx.get("texto", ""), troca=ctx.get("troca"), grupo=ctx.get("grupo"),
-                               automatico=ctx.get("automatico", False))
+                               automatico=ctx.get("automatico", False),
+                               registrar_falha=not ctx.get("sondagem", False))
     if isinstance(resultado, dict) and "imagem_b64" in resultado:
         return [
             {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",

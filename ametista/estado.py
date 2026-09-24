@@ -58,6 +58,21 @@ offline = False
 ocupado = False              # atendendo um pedido agora
 falando = False              # a sobreposição está tocando a voz dela
 inicio_processo = time.time()
+_fim_da_fala = 0.0           # quando ela parou de falar pela última vez (relógio monotônico)
+
+
+def definir_falando(valor: bool) -> None:
+    global falando, _fim_da_fala
+    if falando and not valor:
+        _fim_da_fala = time.monotonic()
+    falando = valor
+
+
+def segundos_desde_que_falou() -> float:
+    """0 enquanto ela fala; infinito se ainda não falou nada desde que ligou."""
+    if falando:
+        return 0.0
+    return time.monotonic() - _fim_da_fala if _fim_da_fala else float("inf")
 
 
 def _salvar() -> None:

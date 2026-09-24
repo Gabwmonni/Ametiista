@@ -173,9 +173,11 @@ class Ouvido:
         elif tipo == "alerta":
             if self.estado in ("gravando", "processando"):
                 return
-            self._apos_fala = self._modo_de_espera()
-            self.estado, self._falando_desde, self._texto_falando = "falando", self.relogio, \
-                _sem_acento(msg.get("texto", "").lower())
+            if self.estado != "falando":  # aviso depois de uma resposta: mantém o seguimento da resposta
+                self._apos_fala = self._modo_de_espera()
+                self._texto_falando = ""
+            self.estado, self._falando_desde = "falando", self.relogio
+            self._texto_falando += " " + _sem_acento(msg.get("texto", "").lower())
         elif tipo == "fala_terminou" and self.estado == "falando":
             self._depois_de_falar()
         elif tipo == "chamar":

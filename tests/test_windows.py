@@ -26,6 +26,34 @@ def test_janelas_mouse_e_teclas():
     time.sleep(0.05)
     assert controle.posicao_cursor() == (123, 145)
     assert "Nenhuma" in controle.janela_acao("listar") or controle.janela_acao("listar")
+    destino = controle.janela_destino()
+    assert destino is None or isinstance(destino, int)
+    assert controle.janela_de_comando() in ("", "terminal", "caixa Executar")
+    controle.devolver_foco()                    # sem janela da Ametista em foco: não faz nada
+
+
+def test_terminal_de_verdade_e_reconhecido():
+    import subprocess
+
+    from ametista import controle
+
+    p = subprocess.Popen(["cmd.exe", "/k", "title ametista-teste"], creationflags=subprocess.CREATE_NEW_CONSOLE)
+    try:
+        hwnd = None
+        for _ in range(50):
+            hwnd = next((j["hwnd"] for j in controle.janelas() if "ametista-teste" in j["titulo"]), None)
+            if hwnd:
+                break
+            time.sleep(0.1)
+        if not hwnd:
+            pytest.skip("a janela do cmd não apareceu neste computador")
+        controle._focar(hwnd)
+        time.sleep(0.3)
+        if controle.janela_destino() != hwnd:
+            pytest.skip("o Windows não deixou trocar o foco aqui")
+        assert controle.janela_de_comando() == "terminal"
+    finally:
+        p.kill()
 
 
 def test_informacoes_do_pc():

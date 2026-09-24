@@ -42,8 +42,11 @@ def _dpi() -> None:
 
 
 if args.diagnostico:
-    from . import diagnostico
+    from . import config, diagnostico, semantica
 
+    if config.BUSCA_SEMANTICA:
+        print("Carregando o modelo de busca por significado…")
+        semantica.baixar()
     itens = diagnostico.executar()
     print(diagnostico.relatorio(itens))
     print("\n" + diagnostico.resumir(itens))

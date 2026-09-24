@@ -40,6 +40,20 @@ def test_primeira_frase_longa_corta_na_virgula(publicados):
     loc.terminar()
 
 
+def test_quebra_de_linha_fecha_o_trecho_na_hora(publicados):
+    loc = fala.Locutor()
+    loc.texto("Deixa eu ver")
+    loc.texto("\n")                                   # o cérebro manda isso antes de usar uma ferramenta
+    for _ in range(100):
+        if _trechos(publicados):
+            break
+        time.sleep(0.01)
+    assert [t["texto"] for t in _trechos(publicados)] == ["Deixa eu ver"]
+    loc.texto("Achei!")
+    loc.terminar()
+    assert [t["texto"] for t in _trechos(publicados)] == ["Deixa eu ver", "Achei!"]
+
+
 def test_abreviacoes_nao_cortam(publicados):
     loc = fala.Locutor()
     loc.texto("Falei com o Dr. Silva hoje. Tudo certo.")

@@ -56,6 +56,16 @@ def test_desfazer_e_repetir(dono, monkeypatch):
     assert cerebro.roteador_local("desfaz isso")["texto"].startswith("Não achei")
 
 
+def test_abrir_local_que_falha_passa_para_a_nuvem_sem_sujar_o_historico(dono, monkeypatch):
+    monkeypatch.setitem(ferramentas.FUNCOES, "pc_abrir",
+                        lambda alvo: f"Não achei nenhum programa ou site chamado {alvo}.")
+    assert cerebro.roteador_local("abre o autocad da obra") is None
+    assert acoes.listar(5) == []
+    monkeypatch.setitem(ferramentas.FUNCOES, "pc_abrir", lambda alvo: f"Abrindo {alvo}.")
+    cerebro.roteador_local("abre o Excel")
+    assert [a["descricao"] for a in acoes.listar(5)] == ["Abriu o Excel"]
+
+
 def test_rotinas_por_frase(dono, monkeypatch):
     monkeypatch.setitem(ferramentas.FUNCOES, "rotina_executar", lambda nome, _grupo=None: f"rotina {nome}")
     assert cerebro.roteador_local("Modo filme")["texto"] == "rotina modo filme"
@@ -120,7 +130,7 @@ def test_ferramentas_em_varias_rodadas(claude, dono, monkeypatch):
     ]
     saida = SaidaFalsa()
     r = cerebro.pensar("como está o clima lá fora hein", saida=saida)
-    assert saida.tudo == "[neutra] Deixa eu ver. Está fazendo vinte e dois graus."   # falou antes da ferramenta
+    assert saida.tudo == "[neutra] Deixa eu ver. \nEstá fazendo vinte e dois graus."   # frase fechada antes da ferramenta
     segunda = claude.chamadas[1]["messages"]
     assert segunda[-1]["content"][0] == {"type": "tool_result", "tool_use_id": "toolu_1",
                                          "content": "Agora em São Paulo: 22°C, céu limpo."}
@@ -218,6 +228,24 @@ def test_sem_internet_usa_ollama(claude, dono, monkeypatch):
     r = cerebro.pensar("me conta uma novidade", saida=saida)
     assert r["origem"] == "local-ia" and estado.offline
     estado.definir_offline(False)
+
+
+@pytest.mark.parametrize("classe, status, mensagem, esperado", [
+    ("RateLimitError", 429, "rate limited", "limite de pedidos"),
+    ("BadRequestError", 400, "Your credit balance is too low to access the Anthropic API.", "créditos"),
+    ("InternalServerError", 529, "Overloaded", "sobrecarregados"),
+    ("NotFoundError", 404, "model: claude-xyz", "modelo do Claude"),
+])
+def test_falha_do_claude_explica_o_motivo(claude, dono, classe, status, mensagem, esperado):
+    import anthropic
+    import httpx2
+
+    req = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+    erro = getattr(anthropic, classe)(mensagem, response=httpx2.Response(status, request=req), body=None)
+    claude.erro_na_chamada = [erro]
+    saida = SaidaFalsa()
+    r = cerebro.pensar("me conta uma novidade", saida=saida)
+    assert r["origem"] == "erro" and esperado in saida.tudo and not estado.offline
 
 
 def test_contexto_tem_ultimas_acoes_e_fatos(claude, dono, monkeypatch):

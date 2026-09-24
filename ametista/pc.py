@@ -385,6 +385,9 @@ def digitar(texto: str) -> str:
     """Digita o texto no campo onde o cursor estiver (ditado)."""
     import keyboard
 
+    from . import controle
+
+    controle.devolver_foco()   # se o pedido foi digitado na Ametista, o texto vai para a janela de trás
     keyboard.write(texto, delay=0.005)
     return "Digitado."
 

@@ -138,6 +138,23 @@ def test_seguimento_e_conversa_continua(o, monkeypatch, publicados):
     assert o.estado == "espera"
 
 
+def test_aviso_no_meio_da_resposta_mantem_o_seguimento(o):
+    o.estado = "processando"
+    eventos.publicar({"tipo": "fala_inicio", "id": "r1"})
+    eventos.publicar({"tipo": "fala_trecho", "id": "r1", "texto": "Amanhã vai chover."})
+    eventos.publicar({"tipo": "alerta", "id": "a1", "texto": "Lembrete: reunião em dez minutos."})
+    assert o.estado == "falando" and "reuniao" in o._texto_falando and "chover" in o._texto_falando
+    eventos.publicar({"tipo": "fala_terminou", "id": "a1"})     # a sobreposição só avisa no fim de tudo
+    assert o.estado == "seguimento"
+
+
+def test_aviso_sozinho_volta_a_esperar_o_nome(o):
+    eventos.publicar({"tipo": "alerta", "id": "a1", "texto": "Seu timer acabou."})
+    assert o.estado == "falando"
+    eventos.publicar({"tipo": "fala_terminou", "id": "a1"})
+    assert o.estado == "espera"
+
+
 def test_conversa_ignora_voz_desconhecida(o, monkeypatch):
     monkeypatch.setattr(identidade, "tem_cadastro", lambda: True)
     monkeypatch.setattr(identidade, "identificar", lambda pcm: Falante(None, "visitante", 0.3))

@@ -373,7 +373,7 @@ _cache_vetores: dict[str, tuple[int, np.ndarray, list[int]]] = {}
 def _guardar_vetor(tabela: str, ref: int, texto: str) -> None:
     from . import semantica
 
-    v = semantica.vetor(texto)
+    v = semantica.vetor(texto, esperar=True)   # sempre em segundo plano
     if v is not None:
         _exec("INSERT OR REPLACE INTO vetores(tabela, ref, vetor) VALUES (?,?,?)",
               (tabela, ref, v.astype(np.float32).tobytes()))
@@ -420,6 +420,24 @@ def _trabalhador_vetores() -> None:
 
 
 threading.Thread(target=_trabalhador_vetores, daemon=True, name="vetores").start()
+
+
+def vetorizar_pendentes(limite: int = 3000) -> int:
+    """Põe na fila as conversas e itens do caderno que ainda não têm vetor (ex.: guardados antes do
+    modelo de significado ficar pronto). Roda em segundo plano, depois que o modelo carrega."""
+    if not config.BUSCA_SEMANTICA:
+        return 0
+    trocas = [r["troca"] for r in _consulta(
+        "SELECT DISTINCT troca FROM conversas WHERE papel='assistant' AND troca NOT IN "
+        "(SELECT ref FROM vetores WHERE tabela='troca') ORDER BY troca DESC LIMIT ?", (limite,))]
+    _fila_vetores.extend(trocas)
+    if trocas:
+        _evento_vetores.set()
+    itens = _consulta("SELECT id, categoria, nome, detalhes FROM caderno WHERE id NOT IN "
+                      "(SELECT ref FROM vetores WHERE tabela='caderno')")
+    for i in itens:
+        _guardar_vetor("caderno", i["id"], f"{i['categoria']}: {i['nome']}. {i['detalhes']}")
+    return len(trocas) + len(itens)
 
 
 # ====================================================================== caderno pessoal

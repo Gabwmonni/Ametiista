@@ -87,11 +87,12 @@ def iniciar_servicos() -> None:
     if _servicos_ligados:
         return
     _servicos_ligados = True
-    from . import arquivos, proatividade, rotinas
+    from . import arquivos, proatividade, rotinas, semantica
 
     proatividade.iniciar()
     rotinas.iniciar_agendador()
     arquivos.iniciar_vigia()
+    semantica.aquecer(depois=memoria.vetorizar_pendentes)   # busca por significado fica pronta sozinha
 
 
 @asynccontextmanager
@@ -571,7 +572,7 @@ async def conversa(ws: WebSocket):
                     estado.cancelar_pedidos("pc")
                 eventos.publicar({**msg, "interno": True})
             elif tipo == "falando":
-                estado.falando = bool(msg.get("valor"))
+                estado.definir_falando(bool(msg.get("valor")))
             elif tipo == "parar_tudo":
                 threading.Thread(target=nucleo.parar_tudo, daemon=True).start()
             elif tipo == "privado":

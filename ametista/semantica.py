@@ -18,7 +18,10 @@ PASTA = config.MODELOS / "embeddings"
 
 _modelo = None
 _falhou = False
-_trava = threading.Lock()
+_aquecendo = False
+_ao_ficar_pronto: list = []
+_trava = threading.Lock()          # carregamento do modelo
+_trava_aviso = threading.Lock()    # fila de quem espera o modelo ficar pronto
 
 
 def _carregar():
@@ -37,19 +40,76 @@ def _carregar():
         return _modelo
 
 
+def pronto() -> bool:
+    """O modelo já está na memória (usar agora não trava ninguém)."""
+    return _modelo is not None
+
+
+def aquecer(depois=None) -> None:
+    """Carrega (e baixa, na primeira vez) o modelo em segundo plano, sem atrasar nenhum pedido.
+    `depois` roda uma vez, em segundo plano, quando o modelo estiver pronto."""
+    global _aquecendo
+    if not config.BUSCA_SEMANTICA or _falhou:
+        return
+    with _trava_aviso:
+        if _modelo is not None:
+            if depois:
+                threading.Thread(target=_avisar, args=([depois],), daemon=True).start()
+            return
+        if depois:
+            _ao_ficar_pronto.append(depois)
+        if _aquecendo:
+            return
+        _aquecendo = True
+    threading.Thread(target=_rodar_aquecimento, daemon=True, name="semantica").start()
+
+
+def _rodar_aquecimento() -> None:
+    global _aquecendo
+    _carregar()
+    with _trava_aviso:
+        _aquecendo = False
+        esperando = _ao_ficar_pronto[:]
+        _ao_ficar_pronto.clear()
+    if _modelo is not None:
+        _avisar(esperando)
+
+
+def _avisar(funcoes) -> None:
+    for f in funcoes:
+        try:
+            f()
+        except Exception as e:
+            print(f"[semantica] erro depois de carregar: {e}")
+
+
+def situacao() -> str:
+    if not config.BUSCA_SEMANTICA:
+        return "desligada"
+    if _modelo is not None:
+        return "ativa"
+    if _falhou:
+        return "indisponível"
+    return "carregando"
+
+
 def disponivel() -> bool:
-    return bool(config.BUSCA_SEMANTICA) and _carregar() is not None
+    return bool(config.BUSCA_SEMANTICA) and _modelo is not None
 
 
-def vetores(textos: list[str]) -> np.ndarray | None:
-    """Uma linha normalizada por texto (ou None se a busca por significado estiver desligada)."""
+def vetores(textos: list[str], esperar: bool = False) -> np.ndarray | None:
+    """Uma linha normalizada por texto, ou None se a busca por significado estiver desligada ou ainda
+    carregando. esperar=True (só em segundo plano) espera o modelo carregar."""
     if not textos or not config.BUSCA_SEMANTICA:
         return None
-    m = _carregar()
-    if m is None:
-        return None
+    if _modelo is None:
+        if not esperar:
+            aquecer()
+            return None
+        if _carregar() is None:
+            return None
     try:
-        v = np.asarray(list(m.embed([t[:1000] for t in textos])), dtype=np.float32)
+        v = np.asarray(list(_modelo.embed([t[:1000] for t in textos])), dtype=np.float32)
     except Exception as e:
         print(f"[semantica] erro ao gerar vetores: {e}")
         return None
@@ -57,8 +117,8 @@ def vetores(textos: list[str]) -> np.ndarray | None:
     return v
 
 
-def vetor(texto: str) -> np.ndarray | None:
-    v = vetores([texto])
+def vetor(texto: str, esperar: bool = False) -> np.ndarray | None:
+    v = vetores([texto], esperar=esperar)
     return None if v is None else v[0]
 
 

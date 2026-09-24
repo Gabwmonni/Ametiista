@@ -89,6 +89,34 @@ def _conferir_mouse(t: Tarefa) -> None:
         raise Parada("Parei porque você mexeu no mouse. Se quiser, é só pedir de novo.")
 
 
+def _conferir_comando(t: Tarefa, nome: str, texto: str) -> None:
+    """Digitar num terminal (ou abrir o Executar) roda comandos no PC: o agente pede um "sim" antes."""
+    from . import controle
+
+    atalho = nome != "type" and controle.atalho_de_comando(texto)
+    lugar = controle.janela_de_comando()
+    if not atalho and not lugar:
+        return
+    if atalho:
+        pergunta = f"Para continuar a tarefa eu preciso abrir um lugar de comandos ({texto}). Posso?"
+    elif nome == "type":
+        curto = texto.strip() if len(texto.strip()) <= 60 else texto.strip()[:57] + "…"
+        pergunta = f"Vou digitar num {lugar}, e isso roda comandos no PC: “{curto}”. Posso?"
+    else:
+        pergunta = f"Vou apertar {texto} num {lugar}. Posso?"
+    t.estado = "aguardando"
+    t.publicar()
+    fala.falar(pergunta, "pensativa", origem="agente")
+    sim = acoes.pedir_confirmacao_agente(pergunta, 120, t.ficha)
+    t.estado = "executando"
+    t.publicar()
+    t.ficha.conferir()
+    if not sim:
+        raise RuntimeError("o usuário não autorizou digitar num lugar que roda comandos. Não tente de novo; "
+                           "ajuste o plano ou conclua.")
+    t.ultimo_cursor = controle.posicao_cursor() if controle.WINDOWS else None
+
+
 def _acao_computador(t: Tarefa, nome: str, a: dict):
     """Executa uma ação do toolset. Devolve o conteúdo do tool_result."""
     from . import controle
@@ -134,6 +162,8 @@ def _acao_computador(t: Tarefa, nome: str, a: dict):
             raise Cancelado()
         return "OK"
     _conferir_mouse(t)
+    if nome in ("type", "key", "hold_key"):
+        _conferir_comando(t, nome, str(a.get("text", "")))
     mods = a.get("text", "") if nome not in ("type", "key", "hold_key") else ""
     if nome in ("left_click", "right_click", "middle_click", "double_click", "triple_click"):
         p = ponto() or controle.posicao_cursor()

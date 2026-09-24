@@ -72,15 +72,18 @@
   // Cada resposta tem um id; os trechos chegam numerados e são tocados em ordem.
   let fala = null;   // {id, trechos: Map, proximo, total, fim, cancelada}
   let tocandoFila = false;
+  const canceladas = new Set();   // respostas interrompidas: trechos que chegarem atrasados são ignorados
+  const filaAlertas = [];         // avisos que chegaram enquanto ela falava: tocam logo depois
+  let tocandoAlerta = false;
 
   function novaFala(id) {
     fala = { id, trechos: new Map(), proximo: 0, total: null, fim: false, cancelada: false, texto: "" };
-    respostaEl.textContent = ""; respostaEl.classList.remove("aviso");
+    if (!tocandoAlerta) { respostaEl.textContent = ""; respostaEl.classList.remove("aviso"); }
     return fala;
   }
 
   async function tocarFila() {
-    if (tocandoFila || !fala) return;
+    if (tocandoFila || !fala || tocandoAlerta) return;   // um aviso tocando termina primeiro
     tocandoFila = true;
     const f = fala;
     while (!f.cancelada && f.trechos.has(f.proximo)) {
@@ -95,6 +98,12 @@
     }
     tocandoFila = false;
     if (!f.cancelada && f.fim && f.proximo >= f.total) terminarFala(f);
+    else if (fala && fala !== f) tocarFila();   // outra resposta começou enquanto esta tocava
+  }
+
+  // Só avisa o ouvido quando não há mais nada para tocar (senão ele escutaria a própria voz dela)
+  function silencio(id) {
+    if (!fala && !tocandoAlerta && !filaAlertas.length) enviar({ tipo: "fala_terminou", id });
   }
 
   function terminarFala(f) {
@@ -102,19 +111,48 @@
     fala = null;
     setFalando(false);
     Rosto.voz(0); nivel(0);
-    enviar({ tipo: "fala_terminou", id: f.id });
     if (f.emocaoFinal === "feliz") Rosto.gesto("acenar");
     Rosto.emocao("neutra");
     adicionarConversa("assistant", f.texto);
     modo("ocioso");
     esconder(pendente ? 30000 : 9000);  // se o ouvido não pedir seguimento, some sozinha
+    if (filaAlertas.length) proximoAlerta();
+    else silencio(f.id);
   }
 
   function cancelarFala() {
-    if (fala) { fala.cancelada = true; const f = fala; fala = null; if (f.texto) adicionarConversa("assistant", f.texto + " …"); }
+    if (fala) {
+      fala.cancelada = true;
+      canceladas.add(fala.id);
+      const f = fala; fala = null;
+      if (f.texto) adicionarConversa("assistant", f.texto + " …");
+    }
     calarAudio();
     setFalando(false);
     Rosto.voz(0); nivel(0);
+  }
+
+  async function proximoAlerta() {
+    if (tocandoAlerta || fala) return;
+    const m = filaAlertas.shift();
+    if (!m) return;
+    tocandoAlerta = true;
+    mostrar();
+    pedidoEl.textContent = m.proativo ? "💡 " + (m.titulo || "") : "⏰ aviso";
+    modo(m.proativo ? "falando" : "alerta");
+    Rosto.emocao(m.emocao || "surpresa");
+    respostaEl.classList.remove("aviso");
+    respostaEl.textContent = m.texto;
+    origemEl.textContent = "";
+    if (m.tom) await tocarAlarme();
+    await falar(m.texto, m.audio);
+    setFalando(false);
+    tocandoAlerta = false;
+    setTimeout(() => { if (!falando && !fala) modo("ocioso"); }, 2500);   // o aviso fica visível um pouco
+    esconder(9000);
+    if (fala) tocarFila();                     // resposta que chegou durante o aviso
+    else if (filaAlertas.length) proximoAlerta();
+    else silencio(m.id);
   }
 
   function setFalando(v) {
@@ -177,18 +215,21 @@
         if (!falando) { mostrar(); modo("pensando", m.texto); }
         break;
       case "fala_inicio":
+        if (canceladas.has(m.id)) return;
+        if (fala && fala.id !== m.id) cancelarFala();   // resposta nova substitui a anterior
         mostrar();
         novaFala(m.id);
         Rosto.emocao(m.emocao || "neutra");
         origemEl.textContent = { local: "⚡ local", nuvem: "☁ nuvem", "local-ia": "🖥 IA local", erro: "⚠" }[m.origem] || "";
         break;
       case "fala_trecho":
-        if (!fala || fala.id !== m.id) { if (fala && fala.cancelada) return; novaFala(m.id); }
+        if (canceladas.has(m.id)) return;
+        if (!fala || fala.id !== m.id) { if (m.seq !== 0) return; novaFala(m.id); }
         fala.trechos.set(m.seq, m);
         tocarFila();
         break;
       case "fala_fim":
-        if (fala && fala.id === m.id) {
+        if (fala && fala.id === m.id && !canceladas.has(m.id)) {
           fala.fim = true; fala.total = m.total; fala.emocaoFinal = m.emocao;
           if (!tocandoFila && fala.proximo >= fala.total) terminarFala(fala);
         }
@@ -198,19 +239,11 @@
         modo("ocioso");
         break;
       case "alerta":
-        mostrar(); cancelarFala();
-        pedidoEl.textContent = m.proativo ? "💡 " + (m.titulo || "") : "⏰ aviso";
-        modo(m.proativo ? "falando" : "alerta");
-        Rosto.emocao(m.emocao || "surpresa");
-        respostaEl.classList.remove("aviso");
-        respostaEl.textContent = m.texto;
-        origemEl.textContent = "";
-        if (m.tom) await tocarAlarme();
-        await falar(m.texto, m.audio);
-        setFalando(false);
-        enviar({ tipo: "fala_terminou", id: m.id });
-        setTimeout(() => { if (!falando && !fala) modo("ocioso"); }, 2500);   // o aviso fica visível um pouco
-        esconder(9000);
+        filaAlertas.push(m);
+        if (!fala) proximoAlerta();
+        else setTimeout(() => {   // não espera para sempre atrás de uma resposta
+          if (filaAlertas.includes(m) && fala) { cancelarFala(); proximoAlerta(); }
+        }, 20000);
         break;
       case "aviso":
         mostrar(); pedidoEl.textContent = ""; origemEl.textContent = "";

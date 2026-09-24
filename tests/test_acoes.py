@@ -121,3 +121,31 @@ def test_confirmacao_do_agente(dono):
     assert acoes.resolver_pendente("pode", DONO_PADRAO)[0]
     t.join(3)
     assert resultado["ok"] is True
+
+
+def test_teclado_em_terminal_pede_confirmacao(dono, monkeypatch):
+    from ametista import controle
+
+    feito = []
+    digitar = lambda texto: feito.append(texto) or "Digitado."   # noqa: E731
+    monkeypatch.setattr(controle, "janela_de_comando", lambda: "")
+    assert acoes.executar("pc_digitar", {"texto": "bom dia"}, digitar) == "Digitado."   # editor comum: na hora
+    r = acoes.executar("pc_teclas", {"teclas": "win+r"}, lambda teclas, repetir=1: "ok")
+    assert r.startswith("PRECISA CONFIRMAR") and "win+r" in acoes.pendente()["pergunta"]
+    acoes.cancelar_pendente()
+
+    monkeypatch.setattr(controle, "janela_de_comando", lambda: "terminal")
+    r = acoes.executar("pc_digitar", {"texto": "del /s /q C:\\Users\\Gabriel\\Documents"}, digitar)
+    assert r.startswith("PRECISA CONFIRMAR") and feito == ["bom dia"]
+    assert acoes.pendente()["pergunta"].startswith("A janela da frente é um terminal")
+    assert acoes.resolver_pendente("não", DONO_PADRAO)[0] and feito == ["bom dia"]
+    assert acoes.executar("pc_teclas", {"teclas": "enter"}, lambda teclas, repetir=1: "ok").startswith("PRECISA")
+    assert acoes.resolver_pendente("pode", DONO_PADRAO) == (True, "ok")
+
+
+def test_atalhos_que_abrem_comandos():
+    from ametista import controle
+
+    assert controle.atalho_de_comando("win+r") and controle.atalho_de_comando("Super+X")
+    assert controle.atalho_de_comando("windows + r")
+    assert not controle.atalho_de_comando("ctrl+r") and not controle.atalho_de_comando("win+d")

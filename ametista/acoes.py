@@ -62,8 +62,19 @@ def _risco_casa(a: dict) -> str:
     return CRITICA if dominio in ("lock", "alarm_control_panel") else LIVRE
 
 
+def _risco_teclado(a: dict) -> str:
+    """Digitar/apertar teclas num terminal ou na caixa Executar roda comandos: pede confirmação."""
+    from . import controle
+
+    if a.get("teclas") and controle.atalho_de_comando(a["teclas"]):
+        return CONFIRMAR
+    return CONFIRMAR if controle.janela_de_comando() else LIVRE
+
+
 RISCO = {
     "pc_sistema": _risco_pc_sistema,
+    "pc_digitar": _risco_teclado,
+    "pc_teclas": _risco_teclado,
     "pc_fechar": CONFIRMAR,
     "steam_instalar": _risco_steam,
     "arquivo_abrir": _risco_arquivo,
@@ -97,6 +108,17 @@ def pergunta_padrao(nome: str, args: dict) -> str:
         return "Posso cancelar esse compromisso?"
     if nome == "arquivo_abrir":
         return "Esse arquivo é um programa. Quer mesmo que eu abra?"
+    if nome in ("pc_digitar", "pc_teclas"):
+        from . import controle
+
+        if nome == "pc_teclas" and controle.atalho_de_comando(args.get("teclas", "")):
+            return f"O atalho {args.get('teclas')} abre um lugar onde dá para rodar comandos no PC. Posso?"
+        lugar = controle.janela_de_comando() or "terminal"
+        if nome == "pc_digitar":
+            texto = str(args.get("texto", "")).strip()
+            texto = texto if len(texto) <= 60 else texto[:57] + "…"
+            return f"A janela da frente é um {lugar}: o que eu digitar vira comando. Posso digitar “{texto}”?"
+        return f"A janela da frente é um {lugar}. Posso apertar {args.get('teclas')}?"
     return f"Posso fazer isso ({descrever(nome, args)})?"
 
 
@@ -467,10 +489,11 @@ def resumo_para_contexto(n: int = 8, minutos: int = 45) -> str:
 # ====================================================================== execução
 def executar(nome: str, args: dict, funcao, *, falante=None, origem: str = "pc", motivo: str = "",
              troca: int | None = None, confirmado: bool = False, grupo: str | None = None,
-             automatico: bool = False):
+             automatico: bool = False, registrar_falha: bool = True):
     """Executa uma ferramenta passando por permissão, risco, registro e desfazer.
 
-    automatico: pedido sem ninguém acompanhando (rotina agendada) -> ações críticas são puladas."""
+    automatico: pedido sem ninguém acompanhando (rotina agendada) -> ações críticas são puladas.
+    registrar_falha=False: tentativa que, se falhar, segue por outro caminho (não suja o histórico)."""
     from . import identidade
 
     falante = falante or identidade.falante_atual.get()
@@ -506,7 +529,8 @@ def executar(nome: str, args: dict, funcao, *, falante=None, origem: str = "pc",
     if nome not in ("pc_ver_tela", "listar_lembretes", "memoria_buscar", "caderno_buscar", "arquivos_buscar",
                     "pc_status", "clima", "noticias", "agenda_listar", "spotify_tocando", "pessoas_listar",
                     "steam_buscar_jogo", "steam_unidades", "steam_status", "rotina_listar", "casa_listar",
-                    "spotify_aparelhos", "acoes_listar", "diagnostico", "tarefas_listar", "caderno_listar"):
+                    "spotify_aparelhos", "acoes_listar", "diagnostico", "tarefas_listar", "caderno_listar") \
+            and (ok or registrar_falha):
         registrar(nome, args, resultado, ok, antes, quem=getattr(falante, "nome", "") or "",
                   origem=origem, motivo=motivo, grupo=grupo, grupo_proprio=grupo_proprio, troca=troca)
     return resultado

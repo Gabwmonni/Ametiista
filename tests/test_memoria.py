@@ -1,8 +1,12 @@
 """Memória: conversas, privacidade, caderno, lembretes recorrentes e por condição."""
 import json
+import threading
+import time
 from datetime import datetime, timedelta
 
-from ametista import estado, memoria
+import pytest
+
+from ametista import config, estado, memoria
 
 
 def _troca(pedido, resposta, privado=False, deslocar=0):
@@ -116,3 +120,61 @@ def test_remover_lembrete_de_aniversario_remove_o_grupo():
                            recorrencia={"tipo": "anual", "mes": 1, "dia": 1, "antes_dias": 1}, grupo="g1")
     assert memoria.remover_lembrete(a["id"])
     assert memoria.lembretes_pendentes() == []
+
+
+@pytest.fixture
+def fastembed_lento(monkeypatch):
+    """fastembed falso que demora para carregar (como no primeiro download) e gera vetores por palavra."""
+    import sys
+    import types
+
+    import numpy as np
+
+    from ametista import semantica
+
+    liberar = threading.Event()
+
+    class TextEmbedding:
+        def __init__(self, modelo, cache_dir=None):
+            liberar.wait(5)
+
+        def embed(self, textos):
+            for t in textos:
+                v = np.zeros(16, dtype=np.float32)
+                for p in t.lower().split():
+                    v[sum(map(ord, p)) % 16] += 1
+                yield v
+
+    monkeypatch.setitem(sys.modules, "fastembed", types.SimpleNamespace(TextEmbedding=TextEmbedding))
+    for nome, valor in (("_modelo", None), ("_falhou", False), ("_aquecendo", False)):
+        monkeypatch.setattr(semantica, nome, valor)
+    monkeypatch.setattr(semantica, "_ao_ficar_pronto", [])
+    monkeypatch.setattr(semantica, "PASTA", memoria.ARQUIVO.parent / "embeddings")
+    yield liberar
+    liberar.set()
+
+
+def test_modelo_de_significado_nunca_atrasa_um_pedido(fastembed_lento, monkeypatch):
+    from ametista import semantica
+
+    monkeypatch.setattr(config, "BUSCA_SEMANTICA", False)
+    t = memoria.nova_troca()
+    memoria.registrar(t, "user", "onde deixei a nota fiscal da betoneira?", "Gabriel")
+    memoria.registrar(t, "assistant", "Na gaveta da garagem.")
+    monkeypatch.setattr(config, "BUSCA_SEMANTICA", True)
+
+    inicio = time.monotonic()
+    assert semantica.vetor("betoneira") is None                  # o modelo ainda está carregando
+    assert memoria.buscar_conversas("nota fiscal")               # a busca por palavras responde na hora
+    assert time.monotonic() - inicio < 1 and semantica.situacao() == "carregando"
+
+    feitos = []
+    semantica.aquecer(depois=lambda: feitos.append(memoria.vetorizar_pendentes()))   # não perde o aviso
+    fastembed_lento.set()
+    for _ in range(100):
+        if feitos and memoria._consulta("SELECT 1 FROM vetores WHERE tabela='troca' AND ref=?", (t,)):
+            break
+        time.sleep(0.05)
+    assert feitos == [1] and semantica.pronto() and semantica.situacao() == "ativa"
+    assert memoria._consulta("SELECT 1 FROM vetores WHERE tabela='troca' AND ref=?", (t,))
+    assert semantica.vetor("betoneira") is not None

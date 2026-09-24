@@ -69,6 +69,20 @@ def test_despedida_encerra_a_conversa(publicados):
     assert any(e["tipo"] == "fim_conversa" for e in publicados)
 
 
+def test_despedida_sem_o_nome_so_responde_logo_depois_dela_falar(publicados, monkeypatch):
+    from ametista import estado
+
+    estado.definir_falando(True)
+    estado.definir_falando(False)                       # ela acabou de responder
+    assert nucleo.atender("valeu", DONO_PADRAO, sem_nome=True)["texto"] == "De nada!"
+    publicados.clear()
+    monkeypatch.setattr(estado, "_fim_da_fala", estado._fim_da_fala - 120)   # dois minutos depois
+    assert nucleo.atender("valeu", DONO_PADRAO, sem_nome=True) == {"ignorado": True}
+    assert any(e["tipo"] == "fim_conversa" for e in publicados)
+    assert not [e for e in publicados if e["tipo"].startswith("fala_")]
+    assert nucleo.atender("valeu Ametista", DONO_PADRAO)["texto"] == "De nada!"   # com o nome: sempre responde
+
+
 def test_fala_ignorada_na_conversa(claude, publicados):
     claude.roteiro = [Resposta(["[ignorar]"])]
     r = nucleo.atender("mãe, cadê a chave do carro?", DONO_PADRAO, sem_nome=True)

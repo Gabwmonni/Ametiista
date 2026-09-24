@@ -174,8 +174,11 @@ def _memoria() -> list[dict]:
     except Exception as e:
         itens.append(_item("Memória", ERRO, f"banco com problema: {e}"))
     if config.BUSCA_SEMANTICA:
-        itens.append(_item("Busca por significado", OK if semantica.disponivel() else AVISO,
-                           "ativa" if semantica.disponivel() else "indisponível: usando busca por palavras"))
+        sit = semantica.situacao()
+        itens.append(_item("Busca por significado", OK if sit == "ativa" else AVISO,
+                           {"ativa": "ativa", "carregando": "carregando o modelo (fica pronta sozinha)",
+                            "desligada": "desligada no painel: usando busca por palavras"}.get(
+                               sit, "indisponível: usando busca por palavras")))
     total = arquivos.total()
     itens.append(_item("Índice de arquivos", OK if total else AVISO,
                        f"{total} arquivos" if total else "ainda montando (leva alguns minutos depois de ligar)"))

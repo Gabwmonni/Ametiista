@@ -58,9 +58,10 @@ _RE_TIMER = re.compile(
 NEGADO = "Desculpe, isso eu só faço para quem tem permissão."
 
 
-def _ferramenta(ferramenta_: str, emocao: str = "feliz", **args) -> dict:
-    """Executa uma ferramenta pelo mesmo caminho da IA (permissão, confirmação, registro, desfazer)."""
-    r = ferramentas.executar(ferramenta_, args)
+def _ferramenta(ferramenta_: str, emocao: str = "feliz", sondagem_: bool = False, **args) -> dict:
+    """Executa uma ferramenta pelo mesmo caminho da IA (permissão, confirmação, registro, desfazer).
+    sondagem_: tentativa local que, se falhar, passa o pedido para a nuvem (a falha não vai para o histórico)."""
+    r = ferramentas.executar(ferramenta_, args, sondagem=sondagem_)
     texto = ferramentas.falavel(r) if isinstance(r, str) else "Feito."
     if texto.startswith("NEGADO"):
         return resposta(NEGADO, "local", "neutra")
@@ -234,7 +235,7 @@ def _rota_pc_musica(t: str, original: str, apenas_controles: bool = False) -> di
     m = re.match(r"^(abre|abrir|abra|inicia|executa)\s+(.+)$", t)
     if m and len(m.group(2).split()) <= 5 and not re.search(r"\b(de novo|arquivo|planilha|pasta do|documento)\b", t):
         orig = re.sub(r"[.,!?]+$", "", original.strip())
-        r = _ferramenta("pc_abrir", emocao="neutra", alvo=re.sub(r"^\S+\s+", "", orig, count=1))
+        r = _ferramenta("pc_abrir", emocao="neutra", sondagem_=True, alvo=re.sub(r"^\S+\s+", "", orig, count=1))
         if not r["texto"].startswith("Não achei"):
             return r
         return None  # a nuvem tenta achar (arquivo, site, nome mal transcrito)
@@ -520,15 +521,19 @@ def perguntar_claude(texto: str, falante=None, saida=None, ficha=None, sem_nome:
             recusa = " [triste] Desculpe, com isso eu não posso ajudar."
             if saida is not None:
                 saida.texto(recusa)
-            return "".join(completo) + recusa
+            return " ".join(completo) + recusa
         if r.stop_reason == "pause_turn":  # busca na web longa: continua
+            if saida is not None and completo[-1].strip():
+                saida.texto("\n")
             mensagens.append({"role": "assistant", "content": _eco(r.content)})
             continue
         usos = [b for b in r.content if getattr(b, "type", None) == "tool_use"]
         if r.stop_reason != "tool_use" or not usos:  # fim normal (ou max_tokens: não roda ferramenta cortada)
-            return "".join(completo).strip()
+            return " ".join(c.strip() for c in completo if c.strip())
         if any(b.name == "chamar_modelo_forte" for b in usos) and tipo_modelo == "rapido":
             raise _TrocarModelo()
+        if saida is not None and completo[-1].strip():
+            saida.texto("\n")  # fecha a frase: ela fala o "deixa eu ver" enquanto a ferramenta trabalha
         resultados = []
         for b in usos:
             if ficha is not None and ficha.cancelado:
@@ -539,7 +544,7 @@ def perguntar_claude(texto: str, falante=None, saida=None, ficha=None, sem_nome:
         mensagens.append({"role": "assistant", "content": _eco(r.content)})
         mensagens.append({"role": "user", "content": resultados})
     if "".join(completo).strip():
-        return "".join(completo).strip()
+        return " ".join(c.strip() for c in completo if c.strip())
     enrolei = "[pensativa] Me enrolei um pouco aqui. Pode repetir de outro jeito?"
     if saida is not None:
         saida.texto(enrolei)
@@ -626,6 +631,25 @@ class _SaidaComFiltro:
                 self.saida.texto(self.buffer)
 
 
+def _motivo_falha(e: Exception) -> str:
+    """Frase curta, para falar em voz alta, explicando por que o Claude não respondeu."""
+    import anthropic
+
+    detalhe = str(getattr(e, "message", "") or e).lower()
+    if "credit balance" in detalhe or "billing" in detalhe:
+        return "Os créditos da conta da Anthropic acabaram. Dá para recarregar no console da Anthropic."
+    if isinstance(e, anthropic.RateLimitError):
+        return "Bati no limite de pedidos da conta do Claude. Tente de novo em um minuto."
+    if isinstance(e, (anthropic.InternalServerError, anthropic.OverloadedError)) or \
+            getattr(e, "status_code", 0) in (500, 502, 503, 529):
+        return "Os servidores do Claude estão sobrecarregados agora. Tente de novo daqui a pouco."
+    if isinstance(e, anthropic.NotFoundError):
+        return "O modelo do Claude configurado não foi encontrado. Confira o nome do modelo no painel."
+    if isinstance(e, anthropic.PermissionDeniedError):
+        return "A chave da Anthropic não tem permissão para esse modelo. Confira no painel."
+    return "O Claude deu um erro agora e não consegui responder. Tente de novo; se continuar, rode o diagnóstico."
+
+
 def pensar(texto: str, falante=None, saida=None, ficha=None, sem_nome: bool = False, origem: str = "pc",
            troca_privada: bool = False) -> dict:
     """Responde um pedido. O texto vai sendo entregue a `saida` (o Locutor) enquanto é gerado."""
@@ -641,7 +665,7 @@ def pensar(texto: str, falante=None, saida=None, ficha=None, sem_nome: bool = Fa
         return rapida
 
     filtro = _SaidaComFiltro(saida, filtrar=sem_nome)
-    bruto, origem_resp, modelo_usado = None, None, None
+    bruto, origem_resp, modelo_usado, falha = None, None, None, None
     if config.ANTHROPIC_API_KEY:
         import anthropic
 
@@ -669,7 +693,8 @@ def pensar(texto: str, falante=None, saida=None, ficha=None, sem_nome: bool = Fa
                 estado.definir_offline(True)
                 break
             except Exception as e:
-                print(f"[cerebro] Claude falhou: {e}")
+                print(f"[cerebro] Claude falhou: {e!r}")
+                falha = _motivo_falha(e)
                 break
     if bruto is None and ollama_disponivel():
         try:
@@ -680,9 +705,17 @@ def pensar(texto: str, falante=None, saida=None, ficha=None, sem_nome: bool = Fa
         except Exception as e:
             print(f"[cerebro] Ollama falhou: {e}")
     if bruto is None:
-        msg = ("Estou sem internet e sem o cérebro local agora. Consigo fazer o básico: hora, timers, música e "
-               "volume." if estado.offline else
-               "Estou sem cérebro na nuvem e sem modelo local agora. Confira a chave da API no painel ou abra o Ollama.")
+        if estado.offline:
+            msg = ("Estou sem internet e sem o cérebro local agora. Consigo fazer o básico: hora, timers, música e "
+                   "volume.")
+        elif falha:
+            msg = falha
+        elif not config.ANTHROPIC_API_KEY:
+            msg = "Estou sem cérebro na nuvem e sem modelo local agora. Coloque a chave da API no painel ou abra o Ollama."
+        else:
+            msg = "Não consegui pensar numa resposta agora. Tente de novo."
+        if filtro.liberado:
+            msg = "… Desculpa, perdi o fio no meio da resposta. " + msg
         if saida is not None:
             saida.emocao("triste")
             saida.texto(msg)
