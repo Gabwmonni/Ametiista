@@ -61,6 +61,7 @@ input[type=text], input[type=password], input[type=number], input[type=time], se
   padding: 8px 11px; outline: none; }
 input:focus, select:focus, textarea:focus { border-color: var(--ametista); }
 .controle input, .controle select { flex: 1; }
+.controle .controle { flex: 1; min-width: 0; }
 .controle input[type=time] { flex: 0 0 auto; width: auto; }
 textarea { resize: vertical; min-height: 360px; font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
   font-size: 13px; line-height: 1.5; }

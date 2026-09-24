@@ -32,7 +32,7 @@ def capturar(monitor: str = "principal", modelo: str | None = None):
     import mss
     from PIL import Image
 
-    with mss.mss() as s:
+    with (getattr(mss, "MSS", None) or mss.mss)() as s:  # mss 10+ renomeou para MSS
         alvo = s.monitors[0] if monitor == "todos" or len(s.monitors) < 2 else s.monitors[1]
         bruto = s.grab(alvo)
         img = Image.frombytes("RGB", bruto.size, bruto.rgb)

@@ -139,6 +139,7 @@
       case "estado":
         base.privado = !!m.privado; base.offline = !!m.offline;
         pintarPrivado();
+        if (respostaEl.classList.contains("aviso")) { respostaEl.textContent = ""; respostaEl.classList.remove("aviso"); }
         if (!falando) modo("ocioso");
         break;
       case "acordou":
@@ -203,15 +204,17 @@
         Rosto.emocao(m.emocao || "surpresa");
         respostaEl.classList.remove("aviso");
         respostaEl.textContent = m.texto;
+        origemEl.textContent = "";
         if (m.tom) await tocarAlarme();
         await falar(m.texto, m.audio);
         setFalando(false);
         enviar({ tipo: "fala_terminou", id: m.id });
-        modo("ocioso");
+        setTimeout(() => { if (!falando && !fala) modo("ocioso"); }, 2500);   // o aviso fica visível um pouco
         esconder(9000);
         break;
       case "aviso":
-        mostrar(); respostaEl.textContent = m.texto; respostaEl.classList.add("aviso");
+        mostrar(); pedidoEl.textContent = ""; origemEl.textContent = "";
+        respostaEl.textContent = m.texto; respostaEl.classList.add("aviso");
         esconder(5000);
         break;
       case "aguardando":

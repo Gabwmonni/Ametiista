@@ -116,7 +116,7 @@ def _acao_computador(t: Tarefa, nome: str, a: dict):
         x1, y1 = controle.para_tela(a["region"][2], a["region"][3], geo)
         import mss
 
-        with mss.mss() as s:
+        with (getattr(mss, "MSS", None) or mss.mss)() as s:  # mss 10+ renomeou para MSS
             bruto = s.grab({"left": min(x0, x1), "top": min(y0, y1), "width": max(1, abs(x1 - x0)),
                             "height": max(1, abs(y1 - y0))})
             img = Image.frombytes("RGB", bruto.size, bruto.rgb)

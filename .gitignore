@@ -8,3 +8,4 @@ voz/referencia/
 celular/node_modules/
 celular/.wrangler/
 celular/.dev.vars
+celular/wrangler.log
