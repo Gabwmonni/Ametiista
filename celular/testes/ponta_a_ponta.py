@@ -2,6 +2,7 @@
 import base64
 import hashlib
 import json
+import os
 import sys
 import time
 import warnings
@@ -72,6 +73,19 @@ res.append(ok(m["tipo"] == "resposta" and m["texto"] == "São 10:00." and "para"
 pc.send(json.dumps({"tipo": "tarefa", "tarefa": {"id": "t1", "objetivo": "organizar", "estado": "executando", "progresso": 50}}))
 m = json.loads(cel.recv(timeout=5))
 res.append(ok(m["tipo"] == "tarefa" and m["tarefa"]["progresso"] == 50, "andamento da tarefa chega ao celular"))
+# arquivo do PC para o celular, em pedaços do tamanho real (384 KB -> ~512 KB em base64, abaixo do limite do relé)
+dados = os.urandom(384 * 1024 + 1000)
+pedacos = [dados[:384 * 1024], dados[384 * 1024:]]
+for i, p in enumerate(pedacos):
+    pc.send(json.dumps({"tipo": "arquivo", "para": de, "id": "arq1", "nome": "aula.pdf", "mime": "application/pdf",
+                        "tamanho": len(dados), "parte": i, "total": len(pedacos), "dados": base64.b64encode(p).decode()}))
+recebidos = [json.loads(cel.recv(timeout=10)) for _ in pedacos]
+res.append(ok(all(m["tipo"] == "arquivo" and "para" not in m for m in recebidos)
+              and b"".join(base64.b64decode(m["dados"]) for m in recebidos) == dados,
+              "arquivo em pedaços chega inteiro ao celular"))
+cel.send(json.dumps({"tipo": "arquivo_recebido", "arquivo": "arq1"}))
+m = pc_recv()
+res.append(ok(m["tipo"] == "arquivo_recebido" and m["arquivo"] == "arq1" and m.get("de"), "celular confirma o arquivo ao PC"))
 h = {"authorization": "Bearer " + token}
 chave = httpx.get(B + "/api/push/chave", headers=h).json()["chave"]
 bruto = base64.urlsafe_b64decode(chave + "=" * (-len(chave) % 4))
@@ -80,7 +94,6 @@ res.append(ok(httpx.get(B + "/api/push/chave", headers=h).json()["chave"] == cha
 res.append(ok(httpx.get(B + "/api/push/chave").status_code == 401, "push exige token"))
 r = httpx.post(B + "/api/push/inscrever", headers=h, json={"inscricao": {"endpoint": "http://inseguro/x", "keys": {"p256dh": "a", "auth": "b"}}})
 res.append(ok(r.status_code == 400, "inscrição sem https recusada"))
-import os
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization
 k = ec.generate_private_key(ec.SECP256R1())
@@ -110,3 +123,4 @@ m = json.loads(pc.recv(timeout=5))
 res.append(ok(m == {"tipo": "celulares", "celulares": 0}, "PC fica sabendo que ninguém mais está olhando"))
 res.append(ok(httpx.get(B + "/api/estado", headers=h).status_code == 401, "token revogado não vale mais"))
 print(f"\n{sum(res)}/{len(res)} ok")
+sys.exit(0 if all(res) else 1)

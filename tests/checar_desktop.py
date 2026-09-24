@@ -47,7 +47,7 @@ try:
     html = httpx.get(BASE + "/").text
     token = re.search(r'data-token="([^"]+)"', html).group(1)
     estado = httpx.get(BASE + "/api/estado", headers={"X-Ametista-Token": token}).json()
-    assert estado["versao"] == "2.0", estado
+    assert estado["versao"] == "3.0", estado
     assert httpx.get(BASE + "/painel").status_code == 200
     with connect(f"ws://127.0.0.1:{PORTA}/ws?token={token}", origin=BASE, open_timeout=10) as ws:
         inicial = json.loads(ws.recv(timeout=10))

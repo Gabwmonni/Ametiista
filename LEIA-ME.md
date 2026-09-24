@@ -1,4 +1,4 @@
-# Projeto Ametista 💜 v2.0
+# Projeto Ametista 💜 v3.0
 
 Assistente de IA que vive no seu Windows, **por cima de qualquer programa**, com um rosto animado de olhos de cristal, monóculo e detalhes em metal líquido iridescente. Ela:
 
@@ -6,6 +6,9 @@ Assistente de IA que vive no seu Windows, **por cima de qualquer programa**, com
 - reconhece **quem está falando** e só obedece as vozes que você cadastrou;
 - **lembra** das conversas, tem um **caderno** com os seus projetos e acha os seus **arquivos** pelo nome;
 - controla o PC: programas, janelas, mouse e teclado, a tela, Steam, Spotify, agenda e casa;
+- **lê, cria e edita arquivos**, abre **blocos de notas**, mostra o que está pesando no PC, **limpa temporários** e **manda arquivos para o celular**, de perto ou de longe;
+- percebe quando você **troca os estudos por distração** e chama você de volta, com calma;
+- pensa **no próprio PC** (Ollama), com as mesmas ferramentas, e pode falar com uma **voz clonada no próprio PC**;
 - faz **tarefas grandes sozinha** (modo agente), mostrando o plano e o andamento;
 - tem **rotinas** ("bom dia", "vou dormir", "modo filme"), lembretes inteligentes e iniciativa com limite;
 - mostra **tudo o que fez**, com **desfazer**, e pede confirmação antes do que é arriscado;
@@ -14,6 +17,18 @@ Assistente de IA que vive no seu Windows, **por cima de qualquer programa**, com
 Ela liga junto com o PC e fica quietinha no ícone 💎 perto do relógio.
 
 ---
+
+## O que mudou da 2.0 para a 3.0
+
+| Área | Novidade |
+|---|---|
+| Arquivos | Ler (texto, Word, Excel, PowerPoint, PDF e imagens), criar, editar, listar, mover, copiar e apagar (vai para a Lixeira), de perto ou pelo celular, com confirmação e **desfazer** |
+| Blocos de notas | *"anota isso num bloco de notas"*, *"acrescenta na lista de compras"*, *"me manda a conversa de hoje num bloco de notas"* |
+| O PC por dentro | O que está aberto e quanto pesa (memória e CPU), espaço nos discos, fechar à força um programa travado, **limpar temporários** e cache |
+| Celular | *"me manda o PDF da aula"*: o arquivo chega no app (com o app fechado, chega um aviso e ele é entregue quando você abrir) |
+| Estudos | **Foco nos estudos**: sessões ("vou estudar cálculo por uma hora"), horários fixos, chamados quando a distração passa do limite, pausas e relatório da semana |
+| Cérebro local | O **Ollama** agora usa as ferramentas (arquivos, notas, programas, foco, lembretes, música...) e pode ser o cérebro principal |
+| Voz | **Voz clonada no próprio PC** num Python separado (placa NVIDIA, incluindo as RTX 50), fluida, sem pesar o resto; o `clonar_voz.bat` escolhe sozinho os melhores trechos das gravações |
 
 ## O que mudou da 1.0 para a 2.0
 
@@ -50,7 +65,7 @@ Ela liga junto com o PC e fica quietinha no ícone 💎 perto do relógio.
 
 Se algo não funcionar: dois cliques em **`diagnostico.bat`** (confere cada peça e diz o que está errado). O `depurar.bat` abre a Ametista com a janela de mensagens, para ver erros. O histórico fica em `dados/ametista.log`.
 
-## 2. Atualizar (da 1.0 ou de uma 2.0 anterior)
+## 2. Atualizar (da 1.0, da 2.0 ou de uma 3.0 anterior)
 
 Nada do que ela aprendeu se perde: o `.env`, as vozes cadastradas, a memória e os modelos ficam onde estão.
 
@@ -59,10 +74,11 @@ Nada do que ela aprendeu se perde: o `.env`, as vozes cadastradas, a memória e 
    - **fecha a Ametista que estiver aberta** (senão a versão antiga continuaria rodando e você não veria nada de novo);
    - instala as bibliotecas novas e traz a memória, as vozes e as configurações de uma instalação em outra pasta;
    - se o app do celular já estava publicado, **publica a versão nova** (no celular, é só abrir o app: ele se atualiza sozinho);
-   - no fim, **abre a Ametista já na versão nova** e mostra "A Ametista 2.0 abriu".
+   - se o **Ollama** estiver instalado, oferece baixar o modelo novo do cérebro local (o `qwen2.5:7b`);
+   - no fim, **abre a Ametista já na versão nova** e mostra "A Ametista 3.0 abriu".
 
 Na primeira vez, ela traz os fatos e lembretes da 1.0 para a memória nova (o arquivo antigo vira `dados/memoria_v1_migrada.json`).
-As configurações novas começam no padrão, e ajustes que mudaram de padrão entre as versões (como a velocidade da voz, agora mais calma) passam para o novo se você nunca tinha mexido neles. Confira no painel (botão direito no 💎 → **Configurações…**).
+As configurações novas começam no padrão, e ajustes que mudaram de padrão entre as versões (como a velocidade da voz, agora mais calma, e o modelo do Ollama, agora o `qwen2.5:7b`) passam para o novo se você nunca tinha mexido neles. Confira no painel (botão direito no 💎 → **Configurações…**).
 
 Para conferir se o celular está na versão nova: **Diagnóstico** no painel avisa quando o app publicado é de uma versão antiga.
 
@@ -138,13 +154,35 @@ O **rosto animado** (barra do PC e celular) mostra só o essencial, flutuando: o
 |---|---|
 | **Claude Haiku 4.5** (dia a dia) | A maioria dos pedidos: rápido e barato, o melhor para voz |
 | **Claude Opus 5** (forte) | Explicações, análises, cálculos, ver a tela, modo agente |
-| **Ollama** (opcional, no PC) | Reserva quando a internet cai |
+| **Ollama** (opcional, no PC) | Reserva quando a internet cai, ou o cérebro principal, se você escolher |
 
 - A escolha é automática (`MODELO_AUTOMATICO`). Desligada, ela usa sempre o modelo do dia a dia.
 - O modelo forte custa bem mais por pedido. Se preferir gastar menos, troque por Sonnet 5 no painel.
 - Se o modelo forte estiver sobrecarregado, a Anthropic responde com outro automaticamente.
 - Se faltar crédito, bater no limite ou a chave estiver errada, ela diz exatamente isso em voz alta.
-- **Sem internet:** hora, timers, volume, teclas de mídia, abrir programas e janelas continuam funcionando no próprio PC. Com o Ollama instalado, ela também conversa.
+- **Sem internet:** hora, timers, volume, teclas de mídia, abrir programas e janelas continuam funcionando no próprio PC. Com o Ollama instalado, ela também conversa **e usa as ferramentas**.
+
+### Cérebro no próprio PC (Ollama)
+
+Com o Ollama, ela pensa no seu PC: as conversas não saem do computador e não gastam crédito. Ela usa as **mesmas ferramentas** do Claude (arquivos, notas, programas, limpeza, foco, lembretes, música, janelas); só ver a tela e o modo agente continuam precisando do Claude.
+
+1. Instale o Ollama em **ollama.com** (ele fica perto do relógio).
+2. Rode o `instalar.bat` de novo: ele oferece baixar o modelo (`qwen2.5:7b`, 4,7 GB). Ou, no Prompt de Comando: `ollama pull qwen2.5:7b`.
+3. Painel → **Cérebro**:
+   - **Cérebro principal: Ollama no PC** para usar sempre o Ollama (o Claude só entra se o Ollama falhar);
+   - ou deixe o Claude como principal e o Ollama fica de reserva sem internet.
+   - O endereço padrão (`http://localhost:11434`) já serve.
+
+| Modelo | Para quem |
+|---|---|
+| `qwen2.5:7b` (padrão) | Placa de vídeo com 8 GB ou mais (uma RTX 5060 Ti responde na hora) |
+| `qwen2.5:14b` | Placa com 12 GB ou mais: mais esperto, um pouco mais lento |
+| `qwen2.5:3b` | PC sem placa de vídeo |
+
+- Ela manda para o modelo só as ferramentas do assunto do pedido: modelos locais erram menos assim.
+- O modelo fica carregado na placa por 30 minutos depois do último pedido, então as respostas seguintes saem rápido.
+- Se o modelo escolhido não estiver baixado, ela usa o melhor que tiver, e o **diagnóstico** avisa.
+- Modelos que não sabem usar ferramentas (como o gemma) só conversam; o diagnóstico também avisa.
 
 ---
 
@@ -185,7 +223,55 @@ Cada ação passa pelo mesmo caminho: permissão de quem pediu → nível de ris
 
 ---
 
-## 9. Modo agente (tarefas grandes)
+## 9. Arquivos, blocos de notas e o PC por dentro 🗂️
+
+Tudo pela voz, pelo texto ou **pelo celular, de longe**:
+
+- **Ler:** *"lê o resumo.pdf da área de trabalho"*, *"o que tem na planilha do orçamento?"*, *"resume o Word do TCC"*. Ela lê texto, código, CSV, JSON, **Word, Excel, PowerPoint, PDF** e vê imagens. Textos longos ela lê em partes.
+- **Ver pastas:** *"o que tem na minha pasta Downloads?"*, *"quais os arquivos mais recentes dos Documentos?"*.
+- **Criar e editar** arquivos de texto (.txt, .md, .csv, .json, código...): *"cria um arquivo lista.txt com..."*, *"troca 'leite' por 'café' na lista de compras"*.
+- **Mover, renomear, copiar, apagar:** *"move o PDF da aula para Documentos/Faculdade"*, *"renomeia para Aula 3.pdf"*, *"apaga o arquivo velho.txt"*.
+- **Blocos de notas:** *"anota num bloco de notas: comprar filamento e ligar pro João"*, *"acrescenta 'pão' na lista de compras"*, *"lê a nota das ideias"*. As notas ficam em `Documentos\Ametista\Notas` e abrem no Bloco de Notas quando o pedido é no PC.
+- **A conversa num bloco de notas:** *"me manda a nossa conversa de hoje num bloco de notas"* (hoje, ontem, semana ou uma data).
+- **O que está pesando:** *"o que está usando mais memória?"*, *"o PC está lento, o que está aberto?"*, *"quanto espaço tem nos discos?"*. Os programas vêm agrupados (as dezenas de processos do Chrome viram uma linha só).
+- **Fechar à força** um programa travado: *"fecha o Chrome à força"*. Processos do Windows e a própria Ametista ficam protegidos.
+- **Limpeza:** *"quanto dá para limpar de temporários?"* e depois *"pode limpar"*: temporários do usuário e do Windows, cache dos navegadores, miniaturas e relatórios de erro (a Lixeira só se você pedir). Arquivos pessoais nunca entram.
+- **Mandar para o celular:** *"me manda o PDF da aula"*, *"manda a pasta das fotos da obra"* (pastas viram .zip; até 25 MB). Veja a seção 16.
+
+**Segurança:**
+
+| O quê | Como funciona |
+|---|---|
+| Ler, listar, criar arquivo novo, mexer nas notas dela | Faz na hora |
+| Mudar um arquivo que já existe, mover por cima de outro, apagar, fechar à força, limpar | Pergunta antes |
+| Pastas do Windows, dos programas instalados, a raiz do disco e a pasta da Ametista | Nunca altera (só lê) |
+
+- Antes de mudar um arquivo, ela guarda uma cópia (em `dados\copias`): **"desfaz"** devolve como estava. Mover, copiar e criar também têm desfazer.
+- **Apagar** manda para a **Lixeira** do Windows: dá para restaurar por lá.
+- Ao editar, o arquivo continua com a mesma codificação e as mesmas quebras de linha.
+- Tudo isso é só do dono: vozes da família e visitantes não mexem em arquivos, notas nem programas.
+
+---
+
+## 10. Foco nos estudos 📚
+
+Ela percebe quando você troca os estudos por distração e chama você de volta, com calma.
+
+- **Começar:** *"vou estudar cálculo por uma hora"*, *"me ajuda a focar"*, *"vou estudar para a prova de química"*. Sem tempo, a sessão vai até você dizer *"terminei de estudar"* (no máximo 4 horas).
+- **Durante a sessão:** a cada 15 segundos ela vê qual janela está na frente e separa em **estudo** (PDF, Word, AutoCAD, VS Code, aulas no YouTube, Moodle, Notion...), **distração** (YouTube que não é aula, Instagram, TikTok, Netflix, Discord, jogos...) ou **neutro**. Passou **3 minutos seguidos** numa distração, ela chama: *"Ei, Gabriel. Faz 4 minutos que você está no YouTube. Bora voltar para cálculo?"*. Não repete antes de 8 minutos, e o tom muda aos poucos.
+- **Pausa:** *"pausa de 10 minutos"*: nada de chamados, e ela avisa quando a pausa acabar.
+- **Fim:** um resumo falado: quanto estudou, quanto se distraiu e com o quê.
+- **Relatório:** *"como foram meus estudos essa semana?"*, *"quanto eu estudei hoje?"*: sessões, horas de estudo, principais distrações, matérias e o melhor dia.
+- **Horários fixos** (painel → **Foco**): por exemplo `seg-sex 19:00-22:00; sab 09:00-12:00`. Nesses horários a sessão começa sozinha.
+- **Fora das sessões** (painel → Foco, ligado por padrão): se você estava estudando e caiu numa distração por 15 minutos, ela comenta uma vez (e segue os limites da Proatividade).
+- **Do seu jeito:** painel → Foco → *Também conta como estudo* / *Também conta como distração* (palavras do título da janela ou programas) e os minutos de tolerância. A matéria que você disser também conta como estudo ("cálculo" no título do vídeo = aula).
+- Se você sair do PC, isso não conta como distração. Lendo um PDF parado, ainda conta como estudo (até 20 minutos).
+
+**Privacidade:** o histórico guarda só o nome da distração ("YouTube", o nome do jogo), nunca o título da janela. No **modo privado** ela não olha nada. O não perturbe segura os chamados.
+
+---
+
+## 11. Modo agente (tarefas grandes)
 
 *"Ametista, organiza a minha pasta Downloads por tipo de arquivo"*, *"pesquisa três orçamentos de betoneira e monta uma planilha"*.
 
@@ -203,7 +289,7 @@ Segurança:
 
 ---
 
-## 10. Rotinas
+## 12. Rotinas
 
 | Rotina | Frases | O que faz |
 |---|---|---|
@@ -217,7 +303,7 @@ Segurança:
 
 ---
 
-## 11. Lembretes, aniversários e iniciativa
+## 13. Lembretes, aniversários e iniciativa
 
 **Lembretes:**
 
@@ -243,7 +329,7 @@ Segurança:
 
 ---
 
-## 12. Vozes e permissões
+## 14. Vozes e permissões
 
 Cada pessoa cadastrada tem um nível:
 
@@ -264,7 +350,7 @@ O texto digitado no PC e o celular pareado contam como o dono.
 
 ---
 
-## 13. A voz dela 🎙️
+## 15. A voz dela 🎙️
 
 **Voz pronta (grátis, padrão):** Francisca, calma e com o tom um pouco mais leve, acolhedora sem ficar infantil.
 No painel (**Voz**) dá para ajustar:
@@ -277,17 +363,34 @@ Toque em **Ouvir** para escutar a combinação escolhida **antes de salvar**, e 
 
 Ela fala a primeira frase sozinha, para começar rápido, e junta as seguintes em trechos de duas ou três frases, para a entonação não recomeçar a cada frase.
 
-### Voz clonada e voz expressiva
+### Voz clonada (no próprio PC ou na ElevenLabs) e voz expressiva
 
-> **Só clone a voz de alguém com autorização dessa pessoa.**
+> **Só clone a voz de alguém com autorização dessa pessoa.** O `clonar_voz.bat` pergunta antes de começar.
 
-1. Grave de **1 a 3 minutos** da pessoa falando naturalmente: frases variadas, sem música nem eco.
-   Pode ser vários arquivos (mp3, wav, m4a, gravação do WhatsApp…).
-2. Coloque os arquivos em **`voz\amostras`**.
+1. Junte gravações da pessoa falando (1 a 3 minutos no total). Podem ser **áudios comuns**, como mensagens do WhatsApp, com pausas, barulho ou música em alguns trechos: ela escolhe sozinha os melhores pedaços.
+2. Coloque os arquivos (mp3, wav, m4a, ogg...) em **`voz\amostras`**.
 3. Dois cliques em **`clonar_voz.bat`** e escolha:
 
 | Opção | Qualidade | Custo | Observação |
 |---|---|---|---|
+| **1. No próprio PC** (XTTS-v2, recomendado) | Muito boa, bem parecida | Grátis | Na primeira vez instala o necessário (~4 GB). Com placa NVIDIA cada frase sai em menos de 1 s; sem placa, alguns segundos |
+| **2. ElevenLabs** | Excelente em português | Plano Starter, a partir de ~US$ 5/mês | Crie a conta em elevenlabs.io e cole a chave no painel (**Voz**) antes |
+
+**Como ela escolhe os trechos** (opção 1): acha onde tem voz humana, descarta pedaços com música ou barulho de fundo, com outra pessoa falando, com som estourado ou com palavra cortada, confere pelo Whisper que é fala clara e junta uns 25 segundos dos melhores trechos em `voz\referencia`. As referências anteriores ficam guardadas em `voz\referencia_anterior`. No fim ela grava um `voz\teste.wav` para você ouvir.
+
+**A voz no próprio PC, por dentro:**
+
+- roda num **Python separado** (`voz_local`), instalado pelo `instalar_voz_local.bat` (o `clonar_voz.bat` chama sozinho na primeira vez): o PyTorch com CUDA ocupa uns 3 GB e fica longe do resto da Ametista, que continua leve;
+- placas **RTX 50** (como a 5060 Ti) usam o PyTorch com CUDA 12.8, que já vem certo; sem placa NVIDIA, instala a versão para processador;
+- abre junto com a Ametista e leva uns 20 segundos para carregar: nesse meio-tempo, ela fala com a voz pronta;
+- divide frases longas nos pontos certos e tira silêncios e estalos das pontas, para a fala sair contínua;
+- manda a fala em MP3 para o celular (6 vezes menor que o áudio cru);
+- o modelo XTTS-v2 é da Coqui e usa a licença **CPML**: grátis para uso pessoal e **não comercial**. O instalador pergunta antes.
+
+- **Voz expressiva:** com o modelo **ElevenLabs v3** (painel → Voz), ela ri, suspira e faz pausas de verdade. Nas outras vozes essas marcas são removidas.
+- Se a voz clonada falhar, ela usa a voz pronta para não ficar muda. O **diagnóstico** diz se a voz local está instalada, se está na placa de vídeo e quanto demora.
+
+---|---|---|---|
 | **1. ElevenLabs** (recomendado) | Excelente em português | Plano Starter, a partir de ~US$ 5/mês | Crie a conta em elevenlabs.io e cole a chave no painel (**Voz**) antes |
 | **2. No próprio PC** (XTTS-v2) | Boa | Grátis | Baixa ~2 GB. Com placa NVIDIA fala em 1 a 2 s; sem ela, pode levar 10 s ou mais |
 
@@ -298,7 +401,7 @@ O script cria a voz, salva tudo no `.env` e gera um `voz\teste.mp3` para você o
 
 ---
 
-## 14. App do celular 📱
+## 16. App do celular 📱
 
 O app mostra **se o PC está ligado, desde quando** ou **quando foi visto pela última vez**, com CPU, memória, música tocando e a janela aberta. Nele você pode:
 
@@ -308,7 +411,8 @@ O app mostra **se o PC está ligado, desde quando** ou **quando foi visto pela �
 - **⏹ Parar tudo** e ligar o **modo privado**;
 - receber **avisos com o app fechado**: lembretes, "o jogo terminou de instalar", compromissos da agenda;
 - segurar o ícone do app para os **atalhos**: Falar, Ver tela, Parar tudo;
-- tocar em **🔊** para receber as respostas **só em texto (🔇)**. Aí o PC nem gera o áudio, o que economiza dados e bateria.
+- tocar em **🔊** para receber as respostas **só em texto (🔇)**. Aí o PC nem gera o áudio, o que economiza dados e bateria;
+- **receber arquivos do PC:** *"me manda o PDF da aula"*, *"puxa a planilha do orçamento"*, *"manda a nota das ideias"*. O arquivo aparece na conversa com **Abrir** e **Baixar** (fotos aparecem na hora). Com o app fechado, chega um aviso e o arquivo é entregue quando você abrir o app (ele espera até 7 dias). Limite de 25 MB; pastas viram .zip.
 
 **Como funciona:** o app fica hospedado de graça na sua conta Cloudflare. O PC abre uma conexão de saída até lá, então não precisa mexer no roteador. Tudo passa por conexão criptografada:
 
@@ -344,7 +448,7 @@ Perdeu o celular? 💎 → Celular → **Desconectar todos os celulares**.
 
 ---
 
-## 15. Steam 🎮
+## 17. Steam 🎮
 
 Exemplo de conversa:
 
@@ -369,7 +473,7 @@ Também funciona: *"o Elden Ring já está instalado?"*, *"quanto falta pro down
 
 ---
 
-## 16. Agenda (Google + Outlook) 📅
+## 18. Agenda (Google + Outlook) 📅
 
 *"O que tenho amanhã?"*, *"marca dentista quinta às 3 da tarde"*, *"passa a reunião da obra para as 16h"*, *"cancela o almoço de sexta"*.
 Ela junta as duas agendas, confirma antes de cancelar e **avisa 10 minutos antes** de cada compromisso (no PC e no celular).
@@ -402,7 +506,7 @@ Na hora de criar um compromisso, ela usa a agenda padrão do painel (Google ou O
 
 ---
 
-## 17. Spotify e casa
+## 19. Spotify e casa
 
 - **Spotify Premium:**
   1. Crie um app em developer.spotify.com.
@@ -417,10 +521,10 @@ Na hora de criar um compromisso, ela usa a agenda padrão do painel (Google ou O
 
 ---
 
-## 18. Diagnóstico e ajustes
+## 20. Diagnóstico e ajustes
 
 **Diagnóstico:** *"Ametista, faz um diagnóstico"*, 💎 → Fazer um diagnóstico, painel → Diagnóstico, ou `diagnostico.bat`.
-Ela confere internet, Claude, Ollama, microfone, reconhecimento de voz, tempo da voz, contas, casa, celular, memória, disco e erros recentes. Depois fala um resumo e guarda o relatório em `dados/diagnostico.txt`.
+Ela confere internet, Claude, Ollama (e se o modelo sabe usar as ferramentas), microfone, reconhecimento de voz, a voz (inclusive a clonada no PC: instalada, na placa de vídeo, tempo de resposta), contas, casa, celular, memória, disco e erros recentes. Depois fala um resumo e guarda o relatório em `dados/diagnostico.txt`.
 
 | Problema | Ajuste (painel) |
 |---|---|
@@ -436,30 +540,36 @@ Ela confere internet, Claude, Ollama, microfone, reconhecimento de voz, tempo da
 | Fala demais sozinha | Proatividade → nível 1 ou 0 |
 | Gasta demais | Cérebro → Modelo para pedidos difíceis: Sonnet 5, ou desligue a escolha automática |
 | Não quero mostrar a janela aberta no celular | Celular → Mostrar a janela aberta: desligado |
+| Ela me chama rápido demais quando me distraio | Foco → Minutos seguidos de distração: 5 ou mais |
+| Um site que uso para estudar conta como distração | Foco → Também conta como estudo: o nome do site |
+| O Ollama responde devagar | Cérebro → Modelo do Ollama: um menor (com placa de vídeo, o 7B já é rápido) |
 
 Tudo isso também está no `.env` (o `.env.example` explica cada linha).
 
 ---
 
-## 19. Leve para o PC
+## 21. Leve para o PC
 
 - **Rosto:** a renda, as gotas e o monóculo são desenhados uma vez só; a cada quadro ela redesenha só olhos, sobrancelhas e boca, e flutua sem girar (girar custa mais). 24 quadros por segundo falando, 8 parada ou dormindo, e **zero** quando a barra está escondida.
 - **Palavra de ativação:** o reconhecedor descansa depois de 1,5 s de silêncio. No primeiro som ele volta, com o meio segundo anterior, para não perder o começo do "Ametista".
 - **Busca por significado:** o modelo carrega em segundo plano e nunca atrasa uma resposta.
 - **Celular:** sem ninguém olhando, nada de status, Spotify ou medição do PC.
 
-## 20. Limites de hoje (honestamente)
+## 22. Limites de hoje (honestamente)
 
 - **Balão flutuante no celular** por cima de outros apps: precisa de um app nativo (Android), fora do escopo de um app web. No celular ela funciona como app e com avisos.
 - Ela **não liga** o PC que estiver desligado. Isso é possível no futuro com Wake-on-LAN e um aparelho que fique ligado em casa.
 - O **modo agente** é bom, mas não perfeito: em sites muito dinâmicos ele pode errar ou desistir. Ele sempre para se você mexer no mouse, e pergunta antes de qualquer coisa sem volta.
-- O **reconhecimento de voz** não é uma trava de segurança (veja a seção 12).
+- O **reconhecimento de voz** não é uma trava de segurança (veja a seção 14).
 - **Interromper pela voz** usa o próprio microfone: com caixas de som muito altas, ela pode demorar a perceber o "para". Use fone, o atalho ou o botão ■.
 - No **iPhone**, os avisos com o app fechado só funcionam no iOS 16.4 ou mais novo, com o app na Tela de Início.
+- **Arquivos:** ela edita só arquivos de texto. Word, Excel, PowerPoint e PDF ela lê, abre, move e manda para o celular, mas não altera por dentro.
+- **Foco nos estudos:** ela vê o que está na tela do **PC**. O que você faz no celular fica de fora.
+- **Ollama:** modelos locais são bons, mas menos espertos que o Claude em pedidos longos ou complicados. Ver a tela e o modo agente continuam precisando do Claude.
 
 ---
 
-## 21. Estrutura
+## 23. Estrutura
 
 ```
 IDENTIDADE_DA_AMETISTA.md  a personalidade dela (editável)
@@ -470,14 +580,22 @@ ametista/
   ouvido.py         microfone, palavra de ativação, interrupção, conversa contínua, cadastro de voz
   identidade.py     quem está falando + permissões
   cerebro.py        roteador local + Claude (rápido/forte) + Ollama
+  cerebro_local.py  Ollama com ferramentas
   fala.py           fala em trechos (começa antes de terminar de pensar)
   voz.py            ElevenLabs / XTTS / edge, voz expressiva, reserva automática
+  voz_local.py      abre e usa o servidor da voz clonada no PC (voz_local_servidor.py, Python separado)
+  clonar_voz.py     escolhe os trechos das gravações e clona a voz
   personalidade.py  carrega a IDENTIDADE_DA_AMETISTA.md
   acoes.py          registro, desfazer, níveis de confirmação
   ferramentas.py    tudo o que ela sabe fazer
   memoria.py        fatos, conversas, caderno, lembretes (SQLite)
   semantica.py      busca por significado (opcional)
   arquivos.py       índice de arquivos por nome
+  arquivos_io.py    ler, criar, editar, mover, copiar e apagar arquivos (com desfazer)
+  notas.py          blocos de notas e a conversa num bloco de notas
+  sistema.py        programas abertos, discos, fechar à força, limpeza de temporários
+  envio.py          arquivos do PC para o celular
+  foco.py           foco nos estudos
   pc.py, controle.py  Windows: volume, programas, tela, mouse, teclado, janelas
   agente.py         modo agente (tarefas grandes)
   rotinas.py        rotinas e modos

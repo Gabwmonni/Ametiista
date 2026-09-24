@@ -88,7 +88,7 @@
   // ---------------------------------------------------------------- páginas de configuração
   const DESCRICOES = {
     "Geral": "Nomes, cidade e atalhos.",
-    "Cérebro": "A inteligência dela: Claude na nuvem, com o Ollama no PC como reserva sem internet.",
+    "Cérebro": "A inteligência dela: Claude na nuvem ou o Ollama no próprio PC, com as mesmas ferramentas.",
     "Voz": "Como ela fala. Toque em \"Ouvir\" para testar.",
     "Ouvido": "Microfone, palavra de ativação, conversa contínua e interrupção por voz.",
     "Pessoas": "Quem pode falar com ela e o que cada pessoa pode fazer.",
@@ -191,7 +191,7 @@
       if (c.chave === "CIDADE") cartao.append(buscaCidade());
     }
     conteudo.append(cartao);
-    const extra = { "Cérebro": extraCerebro, "Voz": extraVoz, "Pessoas": extraPessoas, "Memória": extraMemoria,
+    const extra = { "Cérebro": extraCerebro, "Voz": extraVoz, "Pessoas": extraPessoas, "Memória": extraMemoria, "Foco": extraFoco,
                     "Contas": extraContas, "Agenda": extraContas, "Celular": extraCelular }[secao];
     if (extra) extra();
   }
@@ -241,6 +241,46 @@
     conteudo.append(el("div", { class: "cartao" }, el("div", { class: "linha" },
       el("div", { class: "cresce" }, "Ouvir como ela fica com o que está escolhido acima (antes de salvar)."),
       el("button", { class: "secundario", texto: "Ouvir", onclick: testarVoz }))));
+    const cartao = el("div", { class: "cartao" });
+    conteudo.append(el("h2", { texto: "Voz clonada no PC" }), cartao);
+    api("/api/voz-local").then((d) => {
+      let selo, texto;
+      if (!d.instalado) {
+        selo = el("span", { class: "selo", texto: "não instalada" });
+        texto = "Coloque os áudios da voz em voz\\amostras e dê dois cliques em clonar_voz.bat (opção 1). Ele instala tudo na primeira vez.";
+      } else if (!d.referencias) {
+        selo = el("span", { class: "selo erro", texto: "sem amostras" });
+        texto = "Instalada, mas sem a voz: coloque os áudios em voz\\amostras e rode o clonar_voz.bat.";
+      } else {
+        const onde = d.dispositivo === "cuda" || d.cuda ? `na placa de vídeo${d.gpu ? " (" + d.gpu + ")" : ""}` : "no processador";
+        selo = el("span", { class: "selo " + (d.erro ? "erro" : "ok"), texto: d.erro ? "com erro" : d.pronto ? "pronta" : d.rodando ? "carregando" : "instalada" });
+        texto = d.erro ? `${d.erro} (veja dados/voz_local.log)` :
+          `${d.referencias} trechos de referência, rodando ${onde}.` + (d.escolhida ? "" : " Para usar, escolha \"Voz clonada no próprio PC\" acima e salve.");
+      }
+      cartao.append(el("div", { class: "linha" }, selo, el("div", { class: "cresce detalhe", texto })));
+    }).catch(() => {});
+  }
+
+  function extraFoco() {
+    const cartao = el("div", { class: "cartao" });
+    conteudo.append(el("h2", { texto: "Sessão e relatório" }), cartao);
+    const materia = el("input", { type: "text", placeholder: "Matéria (opcional)" });
+    const desenhar = async () => {
+      const d = await tentar(() => api("/api/foco"));
+      if (!d) return;
+      cartao.replaceChildren();
+      if (d.sessao) {
+        cartao.append(el("div", { class: "linha" }, el("span", { class: "selo ok", texto: "estudando" }), el("div", { class: "cresce", texto: d.sessao + "." }),
+          el("button", { class: "secundario", texto: "Encerrar", onclick: async () => { await tentar(() => api("/api/foco", { acao: "parar" }), (r) => r.resultado); desenhar(); } })));
+      } else {
+        cartao.append(el("div", { class: "linha" }, el("div", { class: "cresce" }, materia),
+          el("button", { class: "primario", texto: "Estudar 50 min", onclick: async () => {
+            await tentar(() => api("/api/foco", { acao: "iniciar", minutos: 50, materia: materia.value }), (r) => r.resultado); desenhar();
+          } })));
+      }
+      cartao.append(el("div", { class: "linha detalhe", texto: d.relatorio }));
+    };
+    desenhar();
   }
 
   async function extraPessoas() {

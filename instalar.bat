@@ -3,8 +3,8 @@ chcp 65001 >nul
 title Instalando a Ametista
 cd /d "%~dp0"
 echo.
-echo  ===== Projeto Ametista 2.0 - instalacao =====
-echo  (serve tambem para atualizar a partir da 1.0: nada do que ela aprendeu se perde)
+echo  ===== Projeto Ametista 3.0 - instalacao =====
+echo  (serve tambem para atualizar a 1.0 ou a 2.0: nada do que ela aprendeu se perde)
 echo.
 
 rem --- acha um Python 3.11 ou 3.12 (o "py" escolhe a versao certa quando ha varias)
@@ -87,7 +87,7 @@ if defined NOVO (
   echo      em Cerebro e clique em Salvar.
 ) else (
   echo   1. Suas configuracoes, memoria e vozes cadastradas continuam as mesmas.
-  echo      As novidades da 2.0 estao no painel: botao direito no icone da Ametista.
+  echo      As novidades da 3.0 estao no LEIA-ME e no painel: botao direito no icone da Ametista.
 )
 echo   2. Cadastre a sua voz: botao direito no icone da Ametista ^> Vozes ^> Cadastrar a minha voz.
 echo   3. Algo estranho? De dois cliques em diagnostico.bat.

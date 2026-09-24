@@ -93,7 +93,7 @@ jobs:
           type dados\diagnostico.txt
       - name: Ela abriu sozinha no fim da instalação
         shell: cmd
-        run: .venv\Scripts\python.exe -c "import httpx, sys; r = httpx.get('http://127.0.0.1:8765/api/saude', timeout=10).json(); print(r); open('inicio1.txt', 'w').write(str(r['inicio'])); sys.exit(r['versao'] != '2.0')"
+        run: .venv\Scripts\python.exe -c "import httpx, sys; r = httpx.get('http://127.0.0.1:8765/api/saude', timeout=10).json(); print(r); open('inicio1.txt', 'w').write(str(r['inicio'])); sys.exit(r['versao'] != '3.0')"
       - name: Instalar de novo (atualização) com ela aberta não quebra nada
         shell: cmd
         run: echo.| instalar.bat
@@ -105,7 +105,7 @@ jobs:
         run: .venv\Scripts\python.exe -c "from ametista import pasta_segura as p; import sys; ok = p.fechar_ametista(); print('fechou:', ok, 'ainda aberta:', p._ametista_aberta()); sys.exit(not ok or p._ametista_aberta())"
 
   atualizacao:
-    # Atualização de verdade: instala a 1.0 com o instalar.bat dela, usa, copia a 2.0 por cima e roda o instalar.bat novo
+    # Atualização de verdade: instala a 1.0 com o instalar.bat dela, usa, copia a versão nova por cima e roda o instalar.bat novo
     runs-on: windows-latest
     timeout-minutes: 40
     env:
@@ -131,18 +131,60 @@ jobs:
       - name: Usar a 1.0 (memória, voz cadastrada, .env)
         shell: cmd
         run: C:\Ametista\.venv\Scripts\python.exe tests\semear_v1.py C:\Ametista
-      - name: Copiar a 2.0 por cima
+      - name: Copiar a versão nova por cima
         shell: pwsh
         run: |
           git archive --format=zip -o "$env:RUNNER_TEMP\v2.zip" HEAD
           Expand-Archive "$env:RUNNER_TEMP\v2.zip" -DestinationPath C:\Ametista -Force
-      - name: instalar.bat da 2.0
+      - name: instalar.bat da versão nova
         shell: cmd
         working-directory: C:\Ametista
         run: echo.| instalar.bat
       - name: Nada se perdeu
         shell: cmd
         run: C:\Ametista\.venv\Scripts\python.exe tests\checar_atualizacao.py C:\Ametista
+
+  atualizacao_2:
+    # Quem já tem a 2.0: copia a 3.0 por cima e roda o instalar.bat. Memória, caderno, conversas e o que a pessoa
+    # escolheu no .env continuam; o modelo do Ollama que era o padrão antigo passa para o novo; a leitura de PDF
+    # passa a funcionar.
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      PYTHONUTF8: "1"
+      WHISPER_MODELO: tiny
+      AMETISTA_NAO_ABRIR: "1"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Descompactar a 2.0
+        shell: pwsh
+        run: |
+          git archive --format=zip -o "$env:RUNNER_TEMP\v2.zip" e9698f7
+          Expand-Archive "$env:RUNNER_TEMP\v2.zip" -DestinationPath C:\Ametista
+      - name: instalar.bat da 2.0
+        shell: cmd
+        working-directory: C:\Ametista
+        run: echo.| instalar.bat
+      - name: Usar a 2.0 (memória, caderno, conversa, .env)
+        shell: cmd
+        run: C:\Ametista\.venv\Scripts\python.exe tests\semear_v2.py C:\Ametista
+      - name: Copiar a versão nova por cima
+        shell: pwsh
+        run: |
+          git archive --format=zip -o "$env:RUNNER_TEMP\v3.zip" HEAD
+          Expand-Archive "$env:RUNNER_TEMP\v3.zip" -DestinationPath C:\Ametista -Force
+      - name: instalar.bat da versão nova
+        shell: cmd
+        working-directory: C:\Ametista
+        run: echo.| instalar.bat
+      - name: Nada se perdeu
+        shell: cmd
+        run: C:\Ametista\.venv\Scripts\python.exe tests\checar_v2_para_v3.py C:\Ametista
 
   pasta_no_onedrive:
     # O caso real: a 1.0 instalada em outra pasta e a 2.0 descompactada num caminho longo dentro do OneDrive.

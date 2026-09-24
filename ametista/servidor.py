@@ -316,6 +316,35 @@ async def gravar_identidade(request: Request):
     return {"ok": True}
 
 
+# ====================================================================== voz clonada no PC e foco
+@app.get("/api/voz-local")
+async def api_voz_local():
+    from . import voz_local
+
+    return {**await asyncio.to_thread(voz_local.resumo), "escolhida": config.VOZ_PROVEDOR == "local"}
+
+
+@app.get("/api/foco")
+async def api_foco():
+    from . import foco
+
+    s = foco.monitor().sessao
+    return {"relatorio": await asyncio.to_thread(foco.relatorio, "semana"),
+            "sessao": foco.resumo_contexto().split(". Se ele")[0] if s else None}
+
+
+@app.post("/api/foco")
+async def api_foco_acao(request: Request):
+    from . import foco
+
+    d = await request.json()
+    if d.get("acao") == "iniciar":
+        return {"resultado": foco.iniciar(float(d.get("minutos") or 0), str(d.get("materia") or ""))}
+    if d.get("acao") == "parar":
+        return {"resultado": foco.parar()}
+    raise HTTPException(400, "ação desconhecida")
+
+
 # ====================================================================== pessoas
 @app.get("/api/pessoas")
 async def api_pessoas():

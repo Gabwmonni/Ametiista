@@ -250,6 +250,16 @@ def test_mover_copiar_e_desfazer(casa, dono):
     assert alvo.read_bytes() == b"antigo"
 
 
+def test_mover_pasta_inteira_pergunta(casa, dono):
+    pasta = casa / "Downloads" / "Fotos da obra"
+    pasta.mkdir()
+    (pasta / "a.jpg").write_bytes(b"x")
+    r = ferramentas.executar("arquivo_mover", {"origem": str(pasta), "destino": "Documentos"})
+    assert r.startswith("PRECISA CONFIRMAR") and "a pasta Fotos da obra, com 1 arquivos" in r and pasta.exists()
+    confirmar()
+    assert (casa / "Documents" / "Fotos da obra" / "a.jpg").exists() and not pasta.exists()
+
+
 def test_apagar_manda_para_a_lixeira(casa, dono, monkeypatch):
     p = casa / "Desktop" / "velho.txt"
     p.write_text("x")

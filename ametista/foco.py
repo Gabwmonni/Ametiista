@@ -286,11 +286,24 @@ def _pode_chamar() -> bool:
     return not estado.privado() and not estado.nao_perturbe_ate() and not estado.ocupado and not estado.falando
 
 
-def _falar(texto: str, emocao: str = "neutra") -> None:
+_fila_fala: list[tuple[str, str, str]] = []
+
+
+def _falar(texto: str, emocao: str = "neutra", chave: str = "foco") -> None:
+    """Guarda a fala: ela sai depois que o vigia solta a trava (gerar a voz pode levar alguns segundos, e um
+    "terminei de estudar" não pode ficar esperando por isso)."""
+    _fila_fala.append((texto, emocao, chave))
+
+
+def _soltar_falas() -> None:
     from . import proatividade
 
-    proatividade.marcar("foco")
-    avisos.proativo(texto, emocao)
+    with _trava:
+        falas = list(_fila_fala)
+        _fila_fala.clear()
+    for texto, emocao, chave in falas:
+        proatividade.marcar(chave)
+        avisos.proativo(texto, emocao)
 
 
 # ====================================================================== banco (histórico)
@@ -369,6 +382,14 @@ class Monitor:
         from . import pc
 
         agora = agora or time.time()
+        try:
+            self._rodada(agora, janela, ocioso, tela_cheia)
+        finally:
+            _soltar_falas()
+
+    def _rodada(self, agora: float, janela, ocioso, tela_cheia) -> None:
+        from . import pc
+
         with _trava:
             dt = max(0.0, min(agora - self.ultimo, 2 * TICK_S)) if self.ultimo else 0.0   # relógio acertado
             self.ultimo = agora
@@ -451,9 +472,9 @@ class Monitor:
                 self.seq_distracao >= ESPONTANEO_MIN * 60:
             if proatividade.pode_falar(proatividade.NORMAL, 2, "foco_espontaneo", 1, tela_cheia=False):
                 proatividade.marcar("foco_espontaneo")
-                avisos.proativo(f"{config.DONO}, você estava estudando e já faz {round(self.seq_distracao / 60)} "
-                                f"minutos {_onde(rotulo, prep)}. Quer voltar? Se quiser, eu marco uma sessão de "
-                                "foco com você.", "pensativa")
+                _falar(f"{config.DONO}, você estava estudando e já faz {round(self.seq_distracao / 60)} minutos "
+                       f"{_onde(rotulo, prep)}. Quer voltar? Se quiser, eu marco uma sessão de foco com você.",
+                       "pensativa", "foco_espontaneo")
                 self.seq_distracao = self.estudo_recente = 0.0
 
     # ---------------------------------------------------------------- horários

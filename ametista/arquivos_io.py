@@ -508,7 +508,7 @@ def _risco_mover(a: dict) -> str:
         d = _destino_final(o, a.get("destino", ""))
     except ValueError:
         return acoes.LIVRE
-    return acoes.CONFIRMAR if d.exists() else acoes.LIVRE
+    return acoes.CONFIRMAR if d.exists() or o.is_dir() else acoes.LIVRE      # pasta inteira: pergunta antes
 
 
 def _preparar_mover(a: dict) -> dict | None:
@@ -629,6 +629,19 @@ FUNCOES = {"arquivo_ler": ler, "arquivo_escrever": escrever, "pasta_listar": lis
            "arquivo_copiar": copiar, "arquivo_apagar": apagar}
 
 
+def _pergunta_mover(a: dict, verbo: str) -> str:
+    try:
+        o = resolver(a.get("origem", ""))
+        d = _destino_final(o, a.get("destino", ""))
+    except ValueError:
+        return f"Posso {verbo} isso?"
+    if d.exists():
+        return (f"Já existe {d.name} em {d.parent}. Posso substituir "
+                f"{'por' if verbo == 'mover' else 'pela cópia de'} {o.name}?")
+    n = sum(len(f) for _, _, f in os.walk(o)) if o.is_dir() else 1
+    return f"Posso {verbo} a pasta {o.name}, com {n} arquivos, para {d.parent}?"
+
+
 def _nome(a: dict, chave: str = "caminho") -> str:
     return re.split(r"[\\/]", str(a.get(chave, "")).rstrip("\\/"))[-1] or str(a.get(chave, ""))
 
@@ -642,12 +655,11 @@ acoes.registrar_ferramenta(
                          "trocar": "Editou"}.get(a.get("modo", "criar"), "Alterou") + f" o arquivo {_nome(a)}")
 acoes.registrar_ferramenta(
     "arquivo_mover", risco=_risco_mover, preparar=_preparar_mover, desfazer=_desfazer_mover,
-    pergunta=lambda a: f"Já existe um arquivo com esse nome no destino. Posso substituir por {_nome(a, 'origem')}?",
+    pergunta=lambda a: _pergunta_mover(a, "mover"),
     descrever=lambda a: f"Moveu {_nome(a, 'origem')} para {a.get('destino')}")
 acoes.registrar_ferramenta(
     "arquivo_copiar", risco=_risco_mover, preparar=_preparar_mover, desfazer=_desfazer_copiar,
-    pergunta=lambda a: f"Já existe um arquivo com esse nome no destino. Posso substituir pela cópia de "
-                       f"{_nome(a, 'origem')}?",
+    pergunta=lambda a: _pergunta_mover(a, "copiar"),
     descrever=lambda a: f"Copiou {_nome(a, 'origem')} para {a.get('destino')}")
 acoes.registrar_ferramenta("arquivo_apagar", risco=acoes.CONFIRMAR, pergunta=_pergunta_apagar,
                            descrever=lambda a: f"Mandou {_nome(a)} para a Lixeira")

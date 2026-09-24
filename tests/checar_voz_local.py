@@ -72,10 +72,13 @@ def main() -> int:
         print(f"ERRO: o servidor não ficou pronto: {s}")
         return 1
     t0 = time.time()
-    b64 = asyncio.run(voz.sintetizar("Oi, Gabriel! Tudo pronto por aqui."))
-    srv.parar()
-    mp3 = base64.b64decode(b64 or "")
+    mp3 = voz._local_sync("Oi, Gabriel! Tudo pronto por aqui.")          # sem reserva: tem que ser a voz clonada
     print(f"   {len(mp3)} bytes em {time.time() - t0:.1f} s", flush=True)
+    b64 = asyncio.run(voz.sintetizar("Oi, Gabriel! Tudo pronto por aqui."))    # pelo caminho de sempre (com cache)
+    srv.parar()
+    if base64.b64decode(b64 or "") != mp3 and len(base64.b64decode(b64 or "")) < 1000:
+        print("ERRO: pelo caminho normal a voz não saiu")
+        return 1
     if not (mp3[:3] == b"ID3" or mp3[:2] == b"\xff\xfb"):
         print("ERRO: não veio MP3 da voz clonada")
         return 1
