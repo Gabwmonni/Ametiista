@@ -2,7 +2,8 @@
 
 VOZ_PROVEDOR no .env (ou no painel):
   elevenlabs -> voz clonada na ElevenLabs (melhor qualidade em português; plano pago a partir de ~US$ 5/mês)
-  local      -> voz clonada rodando no seu PC com XTTS-v2 (grátis; precisa de placa NVIDIA para ficar rápido)
+  local      -> voz clonada rodando no seu PC com XTTS-v2 (grátis; precisa de placa NVIDIA para ficar rápido).
+                O modelo roda num Python separado (voz_local.py); enquanto ele carrega, a fala sai na voz "edge".
   edge       -> vozes neurais prontas da Microsoft (grátis, sem clonagem)
 
 Se o provedor escolhido falhar, cai automaticamente no "edge", e depois na voz do sistema.
@@ -116,6 +117,7 @@ _trava_xtts = threading.Lock()
 
 
 def _xtts_sintetizar(texto: str) -> bytes:
+    """Instalações antigas (coqui-tts dentro do ambiente da Ametista): o modelo roda aqui mesmo."""
     global _xtts
     with _trava_xtts:
         if _xtts is None:
@@ -144,16 +146,65 @@ def _para_wav(amostras, taxa: int) -> bytes:
     return buf.getvalue()
 
 
+def wav_para_mp3(wav: bytes, kbps: int = 64) -> bytes | None:
+    """WAV -> MP3 (uns 6x menor: o áudio chega rápido no celular, pelo relé). None se não der."""
+    try:
+        import av
+        import numpy as np
+
+        with wave.open(io.BytesIO(wav)) as w:
+            taxa, canais = w.getframerate(), w.getnchannels()
+            pcm = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
+        if canais != 1:
+            pcm = pcm.reshape(-1, canais).mean(axis=1).astype(np.int16)
+        saida = io.BytesIO()
+        with av.open(saida, "w", format="mp3") as recipiente:
+            fluxo = recipiente.add_stream("libmp3lame", rate=taxa)
+            fluxo.bit_rate = kbps * 1000
+            fluxo.layout = "mono"
+            quadro = av.AudioFrame.from_ndarray(pcm.reshape(1, -1), format="s16", layout="mono")
+            quadro.sample_rate = taxa
+            for pacote in fluxo.encode(quadro):
+                recipiente.mux(pacote)
+            for pacote in fluxo.encode(None):
+                recipiente.mux(pacote)
+        dados = saida.getvalue()
+        return dados or None
+    except Exception as e:
+        print(f"[voz] não converti para mp3: {e}")
+        return None
+
+
+def _local_sync(texto: str) -> bytes:
+    from . import voz_local
+
+    if voz_local.instalado():
+        wav = voz_local.falar(texto)
+    else:
+        wav = _xtts_sintetizar(texto)
+    return wav_para_mp3(wav) or wav
+
+
 async def _local(texto: str) -> bytes | None:
-    return await asyncio.to_thread(_xtts_sintetizar, texto)
+    return await asyncio.to_thread(_local_sync, texto)
 
 
 PROVEDORES = {"edge": _edge, "elevenlabs": _elevenlabs, "local": _local}
 
 
+def _assinatura_local() -> str:
+    """Muda quando as amostras da voz clonada mudam (o cache de frases curtas não fica com a voz antiga)."""
+    try:
+        return "|".join(f"{p.name}{p.stat().st_size}{int(p.stat().st_mtime)}"
+                        for p in sorted(config.VOZ_REFERENCIAS.glob("*.wav")))
+    except OSError:
+        return ""
+
+
 def _chave_cache(provedor: str, texto: str) -> str:
     voz = {"edge": f"{config.VOZ}{config.VOZ_VELOCIDADE}{config.VOZ_TOM}",
-           "elevenlabs": f"{config.ELEVENLABS_VOZ_ID}{config.ELEVENLABS_MODELO}", "local": "xtts"}.get(provedor, "")
+           "elevenlabs": f"{config.ELEVENLABS_VOZ_ID}{config.ELEVENLABS_MODELO}",
+           "local": f"xtts{_assinatura_local()}"}.get(provedor, "")
     return hashlib.sha1(f"{provedor}|{voz}|{texto}".encode()).hexdigest()
 
 
@@ -176,7 +227,10 @@ async def sintetizar(texto: str) -> str | None:
         try:
             audio = await funcao(falado)
         except Exception as e:
-            print(f"[voz] {provedor} falhou: {e}")
+            from .voz_local import Carregando
+
+            if not isinstance(e, Carregando):
+                print(f"[voz] {provedor} falhou: {e}")
             continue
         if audio:
             if len(falado) <= 80:

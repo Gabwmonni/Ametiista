@@ -27,7 +27,7 @@ import urllib.request
 from pathlib import Path
 
 LIMITE = 70                          # letras no caminho da pasta (175 + 70 fica com folga abaixo de 259)
-DADOS_USUARIO = ("dados", "modelos", "voz")
+DADOS_USUARIO = ("dados", "modelos", "voz", "voz_local")      # voz_local: o Python da voz clonada (~4 GB)
 NAO_COPIAR = {".venv", "__pycache__", "node_modules", ".wrangler", ".git", *DADOS_USUARIO}
 SEM_PERGUNTAR = "AMETISTA_INSTALAR_SEM_PERGUNTAR"   # instalação automática: responde "sim" a tudo
 PORTA = 8765

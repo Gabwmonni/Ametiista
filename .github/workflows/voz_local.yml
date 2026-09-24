@@ -1,0 +1,45 @@
+# A voz clonada no PC de verdade: instala o PyTorch (o GitHub não tem placa de vídeo, então é a versão para
+# processador) e o XTTS-v2 num Python separado, clona uma voz de exemplo e fala, como o instalar_voz_local.bat
+# e o clonar_voz.bat fazem. Roda quando o código da voz muda (é pesado: baixa uns 3 GB).
+name: Voz local
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "ametista/voz.py"
+      - "ametista/voz_local.py"
+      - "ametista/voz_local_servidor.py"
+      - "ametista/clonar_voz.py"
+      - "ametista/instalar_voz_local.py"
+      - "clonar_voz.bat"
+      - "instalar_voz_local.bat"
+      - "tests/checar_voz_local.py"
+      - ".github/workflows/voz_local.yml"
+
+jobs:
+  voz_local:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      PYTHONUTF8: "1"
+      WHISPER_MODELO: tiny
+      AMETISTA_INSTALAR_SEM_PERGUNTAR: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Dependências da Ametista
+        run: pip install -r requirements.txt
+      - name: Instalar a voz local, clonar uma voz de exemplo e falar
+        run: python tests/checar_voz_local.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: voz-local
+          path: |
+            voz/teste.wav
+            voz/referencia/
+            dados/voz_local.log

@@ -1,16 +1,21 @@
 @echo off
 chcp 65001 >nul
+title Clonar uma voz para a Ametista
 cd /d "%~dp0"
 call .venv\Scripts\activate.bat
-echo Coloque as gravacoes em voz\amostras antes de continuar.
 echo.
-echo  1 = ElevenLabs (melhor qualidade, precisa de plano pago)
-echo  2 = No proprio PC (gratis, precisa de placa NVIDIA para ficar rapido)
+echo  Coloque as gravacoes da voz em voz\amostras antes de continuar
+echo  (audios comuns servem: ela escolhe sozinha os melhores trechos).
+echo.
+echo  1 = No proprio PC (gratis; rapido com placa NVIDIA) - recomendado
+echo  2 = ElevenLabs (na nuvem, precisa de plano pago)
 set /p OP="Escolha 1 ou 2: "
 if "%OP%"=="2" (
-  pip install coqui-tts
-  python -m ametista.clonar_voz --local
-) else (
   python -m ametista.clonar_voz
+) else (
+  if not exist voz_local\instalado.json (
+    python -m ametista.instalar_voz_local --sem-teste || (pause & exit /b 1)
+  )
+  python -m ametista.clonar_voz --local
 )
 pause

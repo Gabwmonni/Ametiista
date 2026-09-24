@@ -164,13 +164,41 @@ def _legivel(n: float) -> str:
 
 
 # ====================================================================== leitura
-def _texto_de_bytes(b: bytes) -> str:
-    for cod in ("utf-8-sig", "utf-16") if b[:2] in (b"\xff\xfe", b"\xfe\xff") else ("utf-8-sig", "cp1252", "latin-1"):
+def _codificacao(b: bytes) -> str:
+    for cod in ("utf-16",) if b[:2] in (b"\xff\xfe", b"\xfe\xff") else ("utf-8-sig", "cp1252", "latin-1"):
         try:
-            return b.decode(cod)
+            b.decode(cod)
+            return cod
         except UnicodeDecodeError:
             continue
-    return b.decode("utf-8", "replace")
+    return "utf-8"
+
+
+def _texto_de_bytes(b: bytes) -> str:
+    return b.decode(_codificacao(b), "replace")
+
+
+def _ler_para_editar(p: Path) -> tuple[str, str, str]:
+    """(texto com quebras de linha "\\n", codificação, quebra de linha original) de um arquivo que vai ser mudado:
+    na hora de gravar, o arquivo continua com a mesma codificação e as mesmas quebras de linha (Windows ou não)."""
+    b = p.read_bytes()
+    cod = _codificacao(b)
+    if cod == "utf-8-sig" and not b.startswith(b"\xef\xbb\xbf"):
+        cod = "utf-8"
+    texto = b.decode(cod, "replace")
+    fim = "\r\n" if "\r\n" in texto else "\n"
+    return texto.replace("\r\n", "\n"), cod, fim
+
+
+def _gravar(p: Path, texto: str, cod: str = "utf-8", fim: str | None = None) -> None:
+    """Grava sem o Python trocar as quebras de linha por conta própria. Arquivo novo: quebras do Windows."""
+    fim = fim or ("\r\n" if sys.platform == "win32" else "\n")
+    texto = texto.replace("\r\n", "\n").replace("\n", fim)
+    try:
+        dados = texto.encode(cod)
+    except (UnicodeEncodeError, LookupError):
+        dados = texto.encode("utf-8")               # letra que não cabe na codificação antiga: passa para UTF-8
+    p.write_bytes(dados)
 
 
 def _sem_tags(xml: str) -> str:
@@ -361,14 +389,15 @@ def escrever(caminho: str, conteudo: str = "", modo: str = "criar", procurar: st
     p.parent.mkdir(parents=True, exist_ok=True)
     if modo == "criar":
         p = _nome_livre(p)
-        p.write_text(conteudo, encoding="utf-8")
+        _gravar(p, conteudo)
         return f"Criei {p} ({len(conteudo)} letras)."
     if not p.exists():
         if modo == "trocar":
             return f"Não achei o arquivo {p}."
-        p.write_text(conteudo, encoding="utf-8")
+        _gravar(p, conteudo)
         return f"Criei {p} ({len(conteudo)} letras)."
-    atual = _texto_de_bytes(p.read_bytes())
+    atual, cod, fim = _ler_para_editar(p)
+    conteudo, procurar, trocar_por = (str(x or "").replace("\r\n", "\n") for x in (conteudo, procurar, trocar_por))
     if modo == "substituir":
         novo = conteudo
     elif modo == "acrescentar":
@@ -382,7 +411,7 @@ def escrever(caminho: str, conteudo: str = "", modo: str = "criar", procurar: st
         novo = atual.replace(procurar, trocar_por)
     else:
         return f"Erro: modo desconhecido '{modo}' (use criar, substituir, acrescentar ou trocar)."
-    p.write_text(novo, encoding="utf-8")
+    _gravar(p, novo, cod, fim)
     feito = {"substituir": "Substituí o conteúdo de", "acrescentar": "Acrescentei no fim de",
              "trocar": "Troquei o trecho em"}[modo]
     return f"{feito} {p}."

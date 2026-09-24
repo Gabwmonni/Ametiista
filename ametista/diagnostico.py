@@ -116,9 +116,39 @@ def _ouvido() -> list[dict]:
     return itens
 
 
+def _voz_local() -> dict:
+    from . import voz_local
+
+    r = voz_local.resumo()
+    if not r["instalado"]:
+        return _item("Voz", ERRO, "a voz clonada no PC foi escolhida, mas não está instalada: rode o "
+                                  "instalar_voz_local.bat (enquanto isso ela usa a voz pronta)")
+    if not r["referencias"]:
+        return _item("Voz", ERRO, "a voz clonada no PC não tem amostras: rode o clonar_voz.bat (enquanto isso ela "
+                                  "usa a voz pronta)")
+    srv = voz_local.servidor()
+    srv.iniciar()
+    s = srv.esperar(150)
+    if not s or not s.get("pronto"):
+        motivo = (s or {}).get("erro") or (s or {}).get("etapa") or "não abriu"
+        return _item("Voz", ERRO if (s or {}).get("erro") else AVISO,
+                     f"voz clonada no PC: {motivo} (veja dados/voz_local.log)")
+    t = time.time()
+    try:
+        srv.falar("Teste de voz.", espera=90)
+    except Exception as e:
+        return _item("Voz", ERRO, f"voz clonada no PC falhou: {e}")
+    ms = (time.time() - t) * 1000
+    onde = f"na placa de vídeo ({s.get('gpu')})" if s.get("dispositivo") == "cuda" else \
+        "no processador (lenta: o ideal é uma placa NVIDIA)"
+    return _item("Voz", OK if ms < 2500 else AVISO, f"voz clonada no PC, {onde}, respondeu em {ms:.0f} ms")
+
+
 def _voz() -> dict:
     from . import voz
 
+    if config.VOZ_PROVEDOR == "local":
+        return _voz_local()
     t = time.time()
     audio = voz.sintetizar_sync("Teste de voz.", espera=20)
     ms = (time.time() - t) * 1000

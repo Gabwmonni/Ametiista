@@ -199,6 +199,29 @@ def test_mudar_arquivo_existente_pede_confirmacao_e_guarda_copia(casa, dono):
     assert "Não encontrei esse trecho" in confirmar()
 
 
+def test_edicao_mantem_quebras_de_linha_e_codificacao(casa, dono):
+    windows = casa / "Desktop" / "windows.txt"
+    windows.write_bytes("linha um\r\nlinha dois\r\n".encode("utf-8"))
+    ferramentas.executar("arquivo_escrever", {"caminho": str(windows), "modo": "trocar", "procurar": "dois",
+                                              "trocar_por": "2\nlinha 3"})
+    confirmar()
+    assert windows.read_bytes() == "linha um\r\nlinha 2\r\nlinha 3\r\n".encode("utf-8")
+    ferramentas.executar("arquivo_escrever", {"caminho": str(windows), "modo": "acrescentar", "conteudo": "fim\n"})
+    confirmar()
+    assert windows.read_bytes().endswith(b"linha 3\r\nfim\r\n")
+    antigo = casa / "Desktop" / "antigo.txt"
+    antigo.write_bytes("ação\n".encode("cp1252"))
+    ferramentas.executar("arquivo_escrever", {"caminho": str(antigo), "modo": "acrescentar", "conteudo": "coração"})
+    confirmar()
+    assert antigo.read_bytes() == "ação\ncoração".encode("cp1252")
+    ferramentas.executar("arquivo_escrever", {"caminho": str(antigo), "modo": "acrescentar", "conteudo": " ✓"})
+    confirmar()
+    assert antigo.read_bytes().decode("utf-8") == "ação\ncoração\n ✓"               # ✓ não cabe no cp1252
+    novo = casa / "Desktop" / "novo.txt"
+    ferramentas.executar("arquivo_escrever", {"caminho": str(novo), "conteudo": "a\nb"})
+    assert novo.read_bytes() == (b"a\r\nb" if sys.platform == "win32" else b"a\nb")
+
+
 def test_nao_escreve_formatos_binarios(casa, dono):
     r = ferramentas.executar("arquivo_escrever", {"caminho": "Documentos/x.docx", "conteudo": "oi"})
     assert r.startswith("Não consigo escrever arquivos .docx")
@@ -300,11 +323,20 @@ def test_processos_e_discos():
 def programa_de_teste(tmp_path):
     """Um processo com nome próprio que não é filho da Ametista (como um programa aberto pelo usuário)."""
     if sys.platform == "win32":
+        import psutil
+
         exe = tmp_path / "ametistateste.exe"
         shutil.copy(sys.executable, exe)
-        p = subprocess.Popen([str(exe), "-c", "import time; time.sleep(120)"],
-                             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
-        pid = p.pid
+        # pelo "start" do cmd, que sai logo: o programa não fica como filho dos testes (nem da "Ametista")
+        subprocess.run(f'cmd /c start "" /b "{exe}" -c "import time; time.sleep(120)"', shell=False)
+        pid = 0
+        for _ in range(50):
+            achados = [p.pid for p in psutil.process_iter(["name"]) if p.info["name"] == "ametistateste.exe"]
+            if achados:
+                pid = achados[0]
+                break
+            time.sleep(0.1)
+        assert pid, "o programa de teste não abriu"
     else:
         exe = tmp_path / "ametistateste"
         shutil.copy(shutil.which("sleep"), exe)

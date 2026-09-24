@@ -6,6 +6,9 @@ __pycache__/
 voz/amostras/*
 !voz/amostras/.coloque_as_gravacoes_aqui
 voz/referencia/
+voz/referencia_anterior/
+voz/teste.*
+voz_local/
 celular/node_modules/
 celular/.wrangler/
 celular/.dev.vars
