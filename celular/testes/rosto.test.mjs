@@ -11,10 +11,12 @@ function carregarRosto() {
   const canvas = { dataset: { transparente: "1" }, clientWidth: 300, clientHeight: 200, width: 0, height: 0,
     getContext: () => ctx2d };
   const quadros = [];
-  let agora = 0;
+  let agora = 0, camadas = 0;
   const janela = {
-    document: { getElementById: () => canvas, createElement: () => ({ ...canvas }), addEventListener: nada, hidden: false },
-    addEventListener: nada, devicePixelRatio: 1, innerWidth: 300, innerHeight: 200,
+    document: { getElementById: () => canvas, createElement: () => (camadas++, { ...canvas }), addEventListener: nada,
+                hidden: false },
+    addEventListener: (tipo, f) => { if (tipo === "resize") janela.redimensionou = f; },
+    devicePixelRatio: 1, innerWidth: 300, innerHeight: 200,
     performance: { now: () => agora },
     requestAnimationFrame: (f) => (quadros.push(f), quadros.length),
     setTimeout: (f) => (quadros.push(() => f()), 1), clearTimeout: nada, Math,
@@ -28,25 +30,48 @@ function carregarRosto() {
       if (f) f(agora);
     }
   };
-  return { Rosto: janela.Rosto, rodar, janela, pendentes: () => quadros.length };
+  return { Rosto: janela.Rosto, rodar, janela, canvas, pendentes: () => quadros.length, camadas: () => camadas };
 }
 
-const LILAS = [199, 155, 255];
+const LILAS = [203, 178, 248];
 const perto = (cor, alvo) => cor.every((v, i) => Math.abs(v - alvo[i]) < 6);
 
-test("o rosto volta ao lilás depois de alerta, modo privado e sem internet", () => {
+test("o brilho volta ao lilás depois de alerta e de ouvir, e a cor volta depois de ficar sem internet", () => {
   const { Rosto, rodar } = carregarRosto();
   Rosto.modo("ocioso");
   rodar(2);
-  assert.ok(perto(Rosto.estado.cor.olho, LILAS), "começa lilás");
-  for (const estado of ["alerta", "privado", "offline"]) {
+  assert.ok(perto(Rosto.estado.brilho, LILAS), "começa lilás");
+  for (const estado of ["alerta", "ouvindo"]) {
     Rosto.modo(estado);
     rodar(3);
-    assert.ok(!perto(Rosto.estado.cor.olho, LILAS), `${estado} muda a cor`);
+    assert.ok(!perto(Rosto.estado.brilho, LILAS), `${estado} muda o brilho`);
     Rosto.modo("ocioso");
     rodar(3);
-    assert.ok(perto(Rosto.estado.cor.olho, LILAS), `depois de ${estado} volta ao lilás: ${Rosto.estado.cor.olho}`);
+    assert.ok(perto(Rosto.estado.brilho, LILAS), `depois de ${estado} volta ao lilás: ${Rosto.estado.brilho}`);
   }
+  Rosto.modo("offline");
+  rodar(3);
+  assert.ok(Rosto.estado.cinza > 0.5, "sem internet: fica sem cor");
+  Rosto.modo("ocioso");
+  rodar(3);
+  assert.ok(Rosto.estado.cinza < 0.05, `a cor volta: cinza ${Rosto.estado.cinza}`);
+});
+
+test("cabelo, pele e joias são desenhados uma vez só (não a cada quadro)", () => {
+  const { Rosto, rodar, canvas, camadas, janela } = carregarRosto();
+  Rosto.modo("falando");
+  Rosto.voz(0.8);
+  rodar(1);
+  const feitas = camadas();
+  assert.ok(feitas > 0, "prepara as camadas");
+  rodar(3);
+  Rosto.modo("pensando"); Rosto.emocao("feliz"); Rosto.gesto("acenar");
+  rodar(2);
+  assert.equal(camadas(), feitas, "nenhuma camada refeita enquanto o tamanho não muda");
+  canvas.clientWidth = 128; canvas.clientHeight = 104;              // mudou de tamanho: refaz, no tamanho novo
+  janela.redimensionou();
+  rodar(1);
+  assert.ok(camadas() > feitas, "refaz as camadas no tamanho novo");
 });
 
 test("o rosto anima e para de desenhar quando fica escondido", () => {

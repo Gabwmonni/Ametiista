@@ -5,8 +5,8 @@
   --borda: #2d2143;
   --texto: #f1eaff;
   --fraco: #a597c4;
-  --ametista: #b77dff;
-  --ametista-2: #7a3dff;
+  --ametista: #cbb2f8;
+  --ametista-2: #6f5bd6;
   --verde: #5fd39b;
   --amarelo: #ffcf6b;
   --vermelho: #ff7d8a;
@@ -24,13 +24,13 @@ a { color: var(--ametista); }
   border-bottom: 1px solid var(--borda); flex-wrap: wrap; }
 .marca { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 18px; }
 .gema { width: 16px; height: 16px; transform: rotate(45deg); border-radius: 4px;
-  background: linear-gradient(135deg, #d9b8ff, var(--ametista-2)); box-shadow: 0 0 14px #8a4dff88; }
+  background: linear-gradient(135deg, #fcc9f2, #cbb2f8 45%, #8f9df1); box-shadow: 0 0 14px #8f9df188; }
 .versao { font-size: 12px; color: var(--fraco); font-weight: 400; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .chip { border: 1px solid var(--borda); background: var(--cartao); border-radius: 99px; padding: 6px 12px;
   cursor: pointer; font-size: 13px; }
 .chip:hover { border-color: var(--ametista); }
-.chip[aria-pressed="true"] { background: rgba(183, 125, 255, .25); border-color: var(--ametista); }
+.chip[aria-pressed="true"] { background: rgba(203, 178, 248, .25); border-color: var(--ametista); }
 .chip.perigo:hover { border-color: var(--vermelho); background: rgba(255, 125, 138, .12); }
 
 .corpo { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 0; max-width: 1180px; margin: 0 auto; }
@@ -41,7 +41,7 @@ a { color: var(--ametista); }
 .menu button { text-align: left; border: 0; background: transparent; padding: 7px 12px; border-radius: 10px;
   cursor: pointer; color: var(--fraco); }
 .menu button:hover { background: var(--cartao); color: var(--texto); }
-.menu button.ativa { background: rgba(183, 125, 255, .18); color: var(--texto); }
+.menu button.ativa { background: rgba(203, 178, 248, .18); color: var(--texto); }
 
 .conteudo { padding: 22px 24px 120px; min-width: 0; outline: none; }
 h1 { font-size: 22px; margin: 0 0 4px; }

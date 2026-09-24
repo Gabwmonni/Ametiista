@@ -1,6 +1,6 @@
 # Projeto Ametista 💜 v2.0
 
-Assistente de IA que vive no seu Windows, **por cima de qualquer programa**, com um rosto animado. Ela:
+Assistente de IA que vive no seu Windows, **por cima de qualquer programa**, com um rosto animado: cabelo prateado preso num coque, olhos azul-cristal e um monóculo de cristal. Ela:
 
 - conversa por voz de verdade: começa a falar antes de terminar de pensar, pode ser **interrompida**, mantém a **conversa** sem você repetir o nome e entende pedidos incompletos ("abre de novo", "desfaz", "mais alto");
 - reconhece **quem está falando** e só obedece as vozes que você cadastrou;
@@ -28,6 +28,7 @@ Ela liga junto com o PC e fica quietinha no ícone 💎 perto do relógio.
 | PC | Clicar, teclar, rolar, controlar janelas, apontar na tela onde clicar, achar e abrir arquivos |
 | Agente | Tarefas de vários passos com plano, barra de progresso e cancelamento |
 | Rotinas e avisos | Rotinas, resumo do dia, lembretes recorrentes e por condição, aniversários, iniciativa com limite por hora |
+| Aparência | **Nova identidade visual**: a personagem da ficha (cabelo prateado em coque, monóculo de cristal, gotas de cristal sob os olhos), com piscadas, olhar, fala e emoções; cores lilás, azul-cristal e rosa em toda a interface e no ícone do celular |
 | Interface | Rosto com novos estados e movimentos de cabeça, barra expansível (conversa, tarefas, avisos, histórico), **painel de configurações** |
 | Celular | Avisos com o app fechado (push), atalhos no ícone, parar tudo, confirmar pelo celular, respostas só em texto (🔇), abre na hora e gasta pouca bateria e dados |
 
@@ -123,6 +124,8 @@ O jeito dela está no arquivo **`IDENTIDADE_DA_AMETISTA.md`**: quem ela é, como
 
 - `{nome}` e `{dono}` são trocados pelos nomes do `.env`.
 - Linhas que começam com `>` são notas para você e não vão para ela.
+
+**A aparência dela** vem da ficha de personagem: cabelo branco-prateado com reflexos iridescentes preso num coque meio bagunçado com estrelas de cristal, olhos azul-cristal com uma estrela no centro, **monóculo de cristal** sobre o olho direito, filigranas com gotinhas de cristal sob os olhos e brincos longos. Ela pisca, olha em volta, respira, mexe a boca com a voz e muda de expressão (feliz, pensativa, surpresa, triste, brava). Cada estado tem um sinal: brilho azul quando ouve, laranja no alerta, olhos fechados no modo privado e dormindo, sem cor quando está sem internet, e um ícone ao lado (✦ pensando, cristal girando trabalhando, ? esperando resposta, cadeado, nuvem riscada, zz).
 
 ---
 
@@ -437,7 +440,7 @@ Tudo isso também está no `.env` (o `.env.example` explica cada linha).
 
 ## 19. Leve para o PC
 
-- **Rosto:** 30 quadros por segundo falando, 10 parada, 8 dormindo, e **zero** quando a barra está escondida.
+- **Rosto:** cabelo, pele e joias são desenhados uma vez só; a cada quadro ela redesenha só olhos, boca e brilhos. 24 quadros por segundo falando, 8 parada ou dormindo, e **zero** quando a barra está escondida.
 - **Palavra de ativação:** o reconhecedor descansa depois de 1,5 s de silêncio. No primeiro som ele volta, com o meio segundo anterior, para não perder o começo do "Ametista".
 - **Busca por significado:** o modelo carrega em segundo plano e nunca atrasa uma resposta.
 - **Celular:** sem ninguém olhando, nada de status, Spotify ou medição do PC.

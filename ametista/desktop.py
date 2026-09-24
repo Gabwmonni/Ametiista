@@ -163,12 +163,12 @@ class Apontador(QWidget):
         for i in range(2):
             f = (self.fase + i * 0.5) % 1.0
             r = 12 + f * 44
-            cor = QColor(183, 125, 255, int(255 * (1 - f)))
+            cor = QColor(150, 128, 240, int(255 * (1 - f)))
             p.setPen(QPen(cor, 4))
             p.setBrush(Qt.NoBrush)
             p.drawEllipse(centro, r, r)
         p.setPen(Qt.NoPen)
-        p.setBrush(QColor(183, 125, 255, 230))
+        p.setBrush(QColor(150, 128, 240, 230))
         p.drawEllipse(centro, 7, 7)
         if self.rotulo:
             p.setFont(QFont("Segoe UI", 10, QFont.DemiBold))
@@ -176,7 +176,7 @@ class Apontador(QWidget):
             largura = min(250, m.horizontalAdvance(self.rotulo) + 20)
             caixa = QRectF(130 - largura / 2, 128, largura, 26)
             p.setBrush(QColor(16, 10, 28, 235))
-            p.setPen(QPen(QColor(183, 125, 255, 200), 1))
+            p.setPen(QPen(QColor(203, 178, 248, 200), 1))
             p.drawRoundedRect(caixa, 12, 12)
             p.setPen(QColor(241, 234, 255))
             p.drawText(caixa, Qt.AlignCenter, m.elidedText(self.rotulo, Qt.ElideRight, int(largura - 16)))
@@ -189,7 +189,7 @@ def icone_gema(tamanho: int = 64, apagada: bool = False, cadeado: bool = False) 
     p = QPainter(pix)
     p.setRenderHint(QPainter.Antialiasing)
     t = tamanho
-    cor1, cor2 = (QColor("#777"), QColor("#444")) if apagada else (QColor("#d9b8ff"), QColor("#7a3dff"))
+    cor1, cor2 = (QColor("#777"), QColor("#444")) if apagada else (QColor("#cbb2f8"), QColor("#6f5bd6"))
     p.setPen(Qt.NoPen)
     p.setBrush(cor2)
     p.drawPolygon(QPolygonF([QPointF(t * .5, t * .04), QPointF(t * .92, t * .38), QPointF(t * .5, t * .96),

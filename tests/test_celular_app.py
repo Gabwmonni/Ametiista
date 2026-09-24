@@ -1,4 +1,5 @@
 """App do celular: arquivos em sincronia e leveza."""
+import gzip
 import re
 from pathlib import Path
 
@@ -21,8 +22,9 @@ def test_service_worker_tem_a_impressao_digital_dos_arquivos_atuais():
 
 
 def test_app_leve():
+    """O que o celular baixa na primeira vez (compactado, como o Cloudflare entrega) continua pequeno."""
     publico = RAIZ / "celular" / "public"
-    total = sum(p.stat().st_size for p in publico.iterdir() if p.name != "icone-512.png")
-    assert total < 80_000, f"o app do celular cresceu para {total} bytes"
+    total = sum(len(gzip.compress(p.read_bytes(), 9)) for p in publico.iterdir() if p.name != "icone-512.png")
+    assert total < 55_000, f"o app do celular cresceu para {total} bytes (compactado)"
     html = (publico / "index.html").read_text(encoding="utf-8")
     assert "fonts.googleapis" not in html and "http" not in re.sub(r"<!--.*?-->", "", html, flags=re.S)
