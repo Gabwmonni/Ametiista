@@ -1,0 +1,26 @@
+# Gera e mede as vozes candidatas (tom, variação e velocidade) e guarda os áudios para ouvir.
+name: Vozes
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "tests/amostras_de_voz.py"
+      - ".github/workflows/vozes.yml"
+
+jobs:
+  amostras:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install edge-tts av numpy
+      - name: Gerar e medir
+        run: python tests/amostras_de_voz.py amostras
+      - uses: actions/upload-artifact@v4
+        with:
+          name: amostras-de-voz
+          path: amostras/
