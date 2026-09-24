@@ -67,6 +67,45 @@ jobs:
         shell: cmd
         run: echo.| instalar.bat
 
+  atualizacao:
+    # Atualização de verdade: instala a 1.0 com o instalar.bat dela, usa, copia a 2.0 por cima e roda o instalar.bat novo
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      PYTHONUTF8: "1"
+      WHISPER_MODELO: tiny
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Descompactar a 1.0
+        shell: pwsh
+        run: |
+          git archive --format=zip -o "$env:RUNNER_TEMP\v1.zip" 77498e1
+          Expand-Archive "$env:RUNNER_TEMP\v1.zip" -DestinationPath C:\Ametista
+      - name: instalar.bat da 1.0
+        shell: cmd
+        working-directory: C:\Ametista
+        run: echo.| instalar.bat
+      - name: Usar a 1.0 (memória, voz cadastrada, .env)
+        shell: cmd
+        run: C:\Ametista\.venv\Scripts\python.exe tests\semear_v1.py C:\Ametista
+      - name: Copiar a 2.0 por cima
+        shell: pwsh
+        run: |
+          git archive --format=zip -o "$env:RUNNER_TEMP\v2.zip" HEAD
+          Expand-Archive "$env:RUNNER_TEMP\v2.zip" -DestinationPath C:\Ametista -Force
+      - name: instalar.bat da 2.0
+        shell: cmd
+        working-directory: C:\Ametista
+        run: echo.| instalar.bat
+      - name: Nada se perdeu
+        shell: cmd
+        run: C:\Ametista\.venv\Scripts\python.exe tests\checar_atualizacao.py C:\Ametista
+
   celular:
     runs-on: ubuntu-latest
     timeout-minutes: 10

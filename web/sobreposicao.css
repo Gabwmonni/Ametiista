@@ -69,7 +69,8 @@ body.navegador { background: linear-gradient(135deg, #1f3b5c, #3a2d5c 55%, #5c2d
 .icone:hover { background: rgba(183,125,255,.25); color: var(--texto); }
 .icone[aria-pressed="true"] { background: rgba(183,125,255,.45); color: #fff; }
 .icone.parar { visibility: hidden; }
-.painel.falando .icone.parar, .painel.pensando .icone.parar, .painel.executando .icone.parar { visibility: visible; }
+.painel.falando .icone.parar, .painel.pensando .icone.parar, .painel.executando .icone.parar,
+.painel.alerta .icone.parar { visibility: visible; }
 .icone.parar:hover { background: rgba(255,125,138,.35); }
 .pedido { font-size: 13px; color: var(--fraco); min-height: 17px; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; }

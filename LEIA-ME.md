@@ -36,7 +36,7 @@ Ela liga junto com o PC e fica quietinha no ícone 💎 perto do relógio.
 ## 1. Instalação (primeira vez)
 
 1. Instale o **Python 3.12** (ou 3.11) em python.org. **Marque "Add Python to PATH".**
-2. Descompacte a pasta num lugar fixo (ex.: `C:\Ametista`). Não deixe em Downloads.
+2. Descompacte num lugar fixo (ex.: `C:\Ametista`). Não deixe em Downloads.
 3. Dois cliques em **`instalar.bat`**. Ele:
    - instala tudo e baixa os modelos offline (ouvir, reconhecer quem fala, transcrever e a busca por significado: cerca de 800 MB);
    - liga o "Iniciar com o Windows".
@@ -53,7 +53,7 @@ Se algo não funcionar: dois cliques em **`diagnostico.bat`** (confere cada peç
 Nada do que ela aprendeu se perde: o `.env`, as vozes cadastradas, a memória e os modelos ficam onde estão.
 
 1. Feche a Ametista: botão direito no 💎 → **Sair**.
-2. Descompacte a 2.0 **na mesma pasta** da 1.0, substituindo os arquivos.
+2. Abra o zip da 2.0, entre na pasta `ametista` de dentro dele e copie **tudo o que está lá** para a pasta onde a 1.0 está (ex.: `C:\Ametista`), escolhendo **substituir** os arquivos.
 3. Dois cliques em **`instalar.bat`** (instala as bibliotecas novas e baixa o modelo da busca por significado).
 4. Dois cliques em **`iniciar.bat`**.
 5. Se você usa o app do celular: dois cliques em **`publicar_celular.bat`** para atualizar o app (mesma conta e mesmo endereço; os celulares pareados continuam pareados). Depois abra o app no celular e toque em **Ativar avisos**.
@@ -393,6 +393,7 @@ Ela confere internet, Claude, Ollama, microfone, reconhecimento de voz, tempo da
 
 | Problema | Ajuste (painel) |
 |---|---|
+| Ela não me ouve de jeito nenhum (o diagnóstico diz "sem áudio chegando") | Configurações do Windows → Privacidade e segurança → Microfone → ligue **"Permitir que aplicativos da área de trabalho acessem o microfone"**. Depois confira o microfone escolhido em Ouvido → Microfone |
 | Ela não percebe quando falo baixo | Ouvido → Sensibilidade: 200 |
 | Acorda sozinha com barulho | Ouvido → Sensibilidade: 600 |
 | Às vezes não me reconhece | Pessoas → Rigor: 0.55, ou refaça o cadastro |

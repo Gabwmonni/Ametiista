@@ -35,7 +35,9 @@ def baixar_identificacao() -> None:
 
 
 def baixar_whisper() -> None:
-    print(f"Baixando modelo de transcrição (Whisper '{config.WHISPER_MODELO}', ~250 a 500 MB)...")
+    tamanho = {"tiny": "~75 MB", "base": "~150 MB", "small": "~480 MB", "medium": "~1,5 GB"}.get(config.WHISPER_MODELO, "")
+    print(f"Modelo de transcrição (Whisper '{config.WHISPER_MODELO}'{', ' + tamanho if tamanho else ''}): "
+          "baixando se ainda não tiver...")
     from faster_whisper import WhisperModel
 
     WhisperModel(config.WHISPER_MODELO, device="cpu", compute_type="int8")

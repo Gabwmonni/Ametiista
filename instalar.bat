@@ -34,6 +34,9 @@ if not exist .venv\Scripts\python.exe (
 )
 call .venv\Scripts\activate.bat
 
+rem --- apaga o codigo compilado da versao anterior (evita rodar pedaco velho depois de atualizar)
+for /d /r "ametista" %%d in (__pycache__) do @if exist "%%d" rd /s /q "%%d"
+
 echo  [2/5] Instalando bibliotecas - pode levar alguns minutos...
 python -m pip install --upgrade pip -q
 python -m pip install -r requirements.txt -q || (
