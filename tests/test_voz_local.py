@@ -333,6 +333,9 @@ def test_candidatos_sobrepostos_nao_contam_duas_vezes():
              cand(8, 15, limpo=False, nota=20), cand(16, 22, limpo=False, nota=19)]
     esc = clonar_voz.escolher(cands)
     assert [(c["ini"], c["fim"]) for c in esc] == [(0, 6), (8, 15), (16, 22)]
+    # trechos vizinhos (frases com 0,2 s de pausa entre elas) entram os dois
+    cands = [cand(0.8, 6.4), cand(6.6, 12.6, nota=29), cand(4.0, 12.6, nota=28)]
+    assert [(c["ini"], c["fim"]) for c in clonar_voz.escolher(cands)] == [(0.8, 6.4), (6.6, 12.6)]
     # limpos de sobra: os com fundo mais alto ficam de fora
     cands = [cand(0, 7), cand(8, 15), cand(16, 22, limpo=False, nota=40)]
     assert [(c["ini"], c["fim"]) for c in clonar_voz.escolher(cands)] == [(0, 7), (8, 15)]
@@ -353,13 +356,18 @@ def test_whisper_descarta_musica(monkeypatch):
     monkeypatch.setattr(clonar_voz, "_whisper", Falso([[Seg(" Eu tenho tanta coisa pra te falar.")],
                                                        [Seg(" [Música]")], [Seg(" hmm", logprob=-1.8)], [],
                                                        [Seg(" palavra meio errada", logprob=-1.2)],
-                                                       [Seg(" chiado", silencio=0.9)]]))
+                                                       [Seg(" chiado", silencio=0.9)],
+                                                       [Seg(" Quero ouvir uma música e ler um livro.")],
+                                                       [Seg(" Música.")], [Seg(" ♪ la la ♪")]]))
     trecho = np.zeros(24000, dtype=np.float32)
     assert clonar_voz._conferir_palavras(trecho) == "Eu tenho tanta coisa pra te falar."
     assert clonar_voz._conferir_palavras(trecho) is None
     assert clonar_voz._conferir_palavras(trecho) is None
     assert clonar_voz._conferir_palavras(trecho) is None                      # nada entendido
     assert clonar_voz._conferir_palavras(trecho) == "palavra meio errada"    # Whisper pequeno errando: fica
+    assert clonar_voz._conferir_palavras(trecho) is None
+    assert clonar_voz._conferir_palavras(trecho) == "Quero ouvir uma música e ler um livro."   # a palavra vale
+    assert clonar_voz._conferir_palavras(trecho) is None
     assert clonar_voz._conferir_palavras(trecho) is None
 
 

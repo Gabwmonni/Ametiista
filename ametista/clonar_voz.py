@@ -227,7 +227,7 @@ def candidatos(audio: np.ndarray, taxa: int, trechos_fala: list[tuple[float, flo
                 continue
             nivel_fala = float(np.percentile(dentro, 60))
             nivel_fundo = float(np.percentile(fundo, 50)) if len(fundo) >= 5 else float(np.percentile(db, 10))
-            snr = nivel_fala - nivel_fundo
+            snr = min(60.0, nivel_fala - nivel_fundo)     # fundo digital (silêncio absoluto) não vira nota infinita
             cheia = float(fala_mask[a:b].mean())
             amostras = audio[int(ini * taxa):int(fim * taxa)]
             estouro = float(np.mean(np.abs(amostras) > 0.98))
@@ -278,8 +278,7 @@ def escolher(cands: list[dict], alvo_s: float = ALVO_S, max_trechos: int = MAX_T
         for c in sorted(grupo, key=lambda c: -c["nota"]):
             if total() >= alvo_s or len(escolhidos) >= max_trechos:
                 return escolhidos
-            if any(c["origem"] == e["origem"] and c["ini"] < e["fim"] + 0.3 and e["ini"] < c["fim"] + 0.3
-                   for e in escolhidos):
+            if any(c["origem"] == e["origem"] and c["ini"] < e["fim"] and e["ini"] < c["fim"] for e in escolhidos):
                 continue
             escolhidos.append(c)
         if total() >= 12:
@@ -302,7 +301,8 @@ def _conferir_palavras(trecho: np.ndarray) -> str | None:
         return ""                                    # sem Whisper: fica só a análise do som
     global motivo
     texto = " ".join(s.text.strip() for s in segs).strip()
-    if not texto or re.search(r"\[|m[úu]sica|♪", texto, re.I):
+    # "[Música]", "♪" ou só "música": é o jeito do Whisper dizer que ouviu música (a palavra no meio da fala vale)
+    if not texto or re.search(r"[\[♪]", texto) or re.fullmatch(r"\W*m[úu]sica\W*", texto, re.I):
         motivo = f"o Whisper ouviu {texto!r}" if texto else "o Whisper não achou fala"
         return None
     # só descarta o que claramente não é fala: um Whisper pequeno erra palavras, mas isso não faz o trecho ruim
