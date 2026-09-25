@@ -107,8 +107,8 @@ CAMPOS: list[Campo] = [
                   ("qwen2.5:14b", "Qwen 2.5 14B (mais esperto; placa com 12 GB ou mais)"),
                   ("llama3.1:8b", "Llama 3.1 8B"),
                   ("qwen2.5:3b", "Qwen 2.5 3B (leve, para PC sem placa de vídeo)")),
-          ajuda="Precisa estar baixado (o instalar.bat oferece; ou rode: ollama pull qwen2.5:7b). Se não estiver, "
-                "ela usa o melhor modelo que você tiver."),
+          ajuda="Precisa estar baixado: use o botão Baixar agora, logo abaixo (baixa em segundo plano e continua "
+                "de onde parar). Enquanto isso, ela usa o melhor modelo que você tiver."),
 
     # ------------------------------------------------------------------ Voz
     Campo("VOZ_PROVEDOR", "edge", "Voz", "Voz da Ametista", tipo="opcao",
