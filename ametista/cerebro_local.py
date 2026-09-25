@@ -230,6 +230,7 @@ def _rodada(nome: str, mensagens: list, tools: list, saida, ficha, pensa: bool) 
     if pensa:
         corpo["think"] = False                 # modelos que "pensam" (qwen3) demoram demais para a voz
     texto, chamadas = [], []
+    segura = None            # None = ainda não sabe; True = parece uma chamada escrita como texto (não fala)
     with httpx.stream("POST", f"{config.OLLAMA_URL}/api/chat", json=corpo,
                       timeout=httpx.Timeout(120, connect=5)) as r:
         if r.status_code == 404:
@@ -250,12 +251,53 @@ def _rodada(nome: str, mensagens: list, tools: list, saida, ficha, pensa: bool) 
             pedaco = msg.get("content") or ""
             if pedaco:
                 texto.append(pedaco)
-                if saida is not None:
+                if segura is None:
+                    inicio = "".join(texto).lstrip()
+                    if inicio:
+                        segura = bool(_COMECO_DE_CHAMADA.match(inicio))
+                        if not segura and saida is not None:
+                            saida.texto("".join(texto))
+                elif not segura and saida is not None:
                     saida.texto(pedaco)
             chamadas += [c for c in (msg.get("tool_calls") or []) if isinstance(c, dict)]
             if dado.get("done"):
                 break
-    return "".join(texto), chamadas
+    dito = "".join(texto)
+    if segura and not chamadas:
+        chamadas = chamadas_no_texto(dito, {t["function"]["name"] for t in tools})
+        if chamadas:
+            dito = ""                                   # era uma chamada: não vira fala
+        elif saida is not None:
+            saida.texto(dito)                           # era texto mesmo: fala agora
+    return dito, chamadas
+
+
+# Modelos pequenos às vezes escrevem a chamada da ferramenta como texto, em vez de chamar de verdade:
+#   {"name": "nota_criar", "arguments": {...}}   ou   <tool_call>{...}</tool_call>   ou   ```json {...} ```
+_COMECO_DE_CHAMADA = re.compile(r"(\{|\[\s*\{|<tool_call>|```)")
+
+
+def chamadas_no_texto(texto: str, nomes: set[str]) -> list[dict]:
+    """As chamadas escritas como texto, só das ferramentas que o modelo recebeu."""
+    t = texto.strip()
+    blocos = (re.findall(r"<tool_call>\s*(.*?)\s*(?:</tool_call>|$)", t, re.S)
+              or re.findall(r"```(?:json)?\s*(.*?)```", t, re.S) or [t])
+    saida = []
+    for bloco in blocos:
+        try:
+            objs = [json.loads(bloco)]
+        except ValueError:
+            objs = []
+            for linha in bloco.splitlines():                 # um JSON por linha
+                try:
+                    objs.append(json.loads(linha))
+                except ValueError:
+                    continue
+        for o in [x for obj in objs for x in (obj if isinstance(obj, list) else [obj])]:
+            if isinstance(o, dict) and o.get("name") in nomes:
+                args = o.get("arguments", o.get("parameters", {}))
+                saida.append({"function": {"name": o["name"], "arguments": args if args is not None else {}}})
+    return saida
 
 
 def _resultado_texto(r) -> str:

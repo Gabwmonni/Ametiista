@@ -390,3 +390,27 @@ def test_painel_mostra_e_comeca_o_download(ollama, monkeypatch):
                 break
             time.sleep(0.05)
         assert c.get("/api/ollama").json()["tem_o_desejado"]
+
+
+# ---------------------------------------------------------------- chamada escrita como texto (modelo pequeno)
+@pytest.mark.parametrize("escrita", [
+    '{"name": "nota_criar", "arguments": {"titulo": "Teste CI", "texto": "funcionou"}}',
+    '<tool_call>\n{"name": "nota_criar", "arguments": {"titulo": "Teste CI", "texto": "funcionou"}}\n</tool_call>',
+    '```json\n{"name": "nota_criar", "parameters": {"titulo": "Teste CI", "texto": "funcionou"}}\n```',
+])
+def test_chamada_escrita_como_texto_vira_chamada(escrita, ollama, dono, notas_tmp):
+    ollama.roteiro.append([{"message": {"role": "assistant", "content": escrita[:15]}},
+                           {"message": {"role": "assistant", "content": escrita[15:]}}])
+    ollama.falar("[feliz] Criei a nota.")
+    saida = SaidaFalsa()
+    r = cerebro_local.perguntar("cria uma nota Teste CI com o texto funcionou", DONO_PADRAO, saida)
+    assert (notas_tmp / "Teste CI.txt").read_text(encoding="utf-8") == "funcionou"
+    assert "{" not in saida.tudo and "tool_call" not in saida.tudo and r == "[feliz] Criei a nota."
+
+
+def test_texto_com_chave_que_nao_e_chamada_e_falado(ollama, dono):
+    ollama.falar('{curiosidade} ', "chaves são usadas em matemática.")
+    saida = SaidaFalsa()
+    assert cerebro_local.perguntar("fala uma curiosidade", DONO_PADRAO, saida).startswith("{curiosidade}")
+    assert saida.tudo == "{curiosidade} chaves são usadas em matemática."
+    assert cerebro_local.chamadas_no_texto('{"name": "apagar_tudo", "arguments": {}}', {"nota_criar"}) == []
