@@ -297,6 +297,32 @@ def test_escolhe_os_trechos_limpos(tmp_path, monkeypatch):
     assert len(list((tmp_path / "referencia_anterior").glob("*.wav"))) == 2
 
 
+def test_frases_curtas_com_pausas_viram_trechos(tmp_path, monkeypatch):
+    """Áudio com frases de 3,5 s e pausas de 1,2 s (como uma voz lendo um texto): as frases se juntam e as
+    pausas ficam curtas na referência."""
+    monkeypatch.setattr(clonar_voz, "_modelo_vad", lambda: None)
+    monkeypatch.setattr(config, "VOZ_REFERENCIAS", tmp_path / "referencia")
+    pecas = [0.8]
+    for k in range(7):
+        pecas += [_fala(3.5, 230 + 5 * k, seed=k), 1.2]
+    audio = _gravacao(pecas)
+    arq = tmp_path / "lendo.wav"
+    with wave.open(str(arq), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(24000)
+        w.writeframes((audio * 32767).astype(np.int16).tobytes())
+    escolhidos = clonar_voz.preparar_local([arq], conferir=False)
+    assert len(escolhidos) >= 2 and sum(c["dur"] for c in escolhidos) >= 12
+    assert all(len(c["falas"]) >= 2 for c in escolhidos)
+    with wave.open(str(tmp_path / "referencia" / "ametista_01.wav")) as w:
+        dur = w.getnframes() / w.getframerate()
+    c = escolhidos[0]
+    fala = sum(b - a for a, b in c["falas"])
+    # fala + pausas de 0,35 s + as pontas (0,08 + 0,15) + a cauda de silêncio (0,3)
+    assert abs(dur - (fala + 0.35 * (len(c["falas"]) - 1) + 0.53)) < 0.15, (dur, fala, c["falas"])
+
+
 def test_candidatos_sobrepostos_nao_contam_duas_vezes():
     def cand(ini, fim, limpo=True, nota=30.0):
         return {"origem": "a", "ini": ini, "fim": fim, "dur": fim - ini, "snr": 30 if limpo else 10,

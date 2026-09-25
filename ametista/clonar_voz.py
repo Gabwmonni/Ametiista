@@ -29,6 +29,8 @@ VAD_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/si
 TAXA = 24000
 ALVO_S = 26                  # segundos de referência no total (o XTTS usa até ~30)
 TRECHO_MIN, TRECHO_MAX = 5.0, 11.5
+PAUSA_MAX = 1.6              # frases separadas por até 1,6 s entram no mesmo trecho...
+PAUSA_REF = 0.35             # ...mas a pausa entre elas fica com no máximo 0,35 s na referência
 MAX_TRECHOS = 4
 
 
@@ -204,13 +206,17 @@ def candidatos(audio: np.ndarray, taxa: int, trechos_fala: list[tuple[float, flo
     tom_tipico = float(np.median(todos_tons)) if todos_tons else 0.0
     saida = []
     for i in range(len(trechos_fala)):
+        dur = 0.0
         for j in range(i, len(trechos_fala)):
             ini, fim = trechos_fala[i][0], trechos_fala[j][1]
-            dur = fim - ini
+            if j > i:
+                pausa = trechos_fala[j][0] - trechos_fala[j - 1][1]
+                if pausa > PAUSA_MAX:
+                    break                            # pausa longa: vira outro trecho
+                dur += min(pausa, PAUSA_REF)
+            dur += trechos_fala[j][1] - trechos_fala[j][0]   # duração como vai ficar (pausas encurtadas)
             if dur > TRECHO_MAX:
                 break
-            if j > i and trechos_fala[j][0] - trechos_fala[j - 1][1] > 1.0:
-                break                                # pausa longa no meio: vira dois trechos
             if dur < TRECHO_MIN:
                 continue
             a, b = int(ini / 0.02), int(fim / 0.02)
@@ -234,8 +240,26 @@ def candidatos(audio: np.ndarray, taxa: int, trechos_fala: list[tuple[float, flo
             variacao = float(np.std(dentro))
             nota = snr + 12 * cheia - 400 * estouro - 30 * outra_voz - 0.3 * max(0.0, variacao - 8) + 0.3 * dur
             saida.append({"origem": origem, "ini": ini, "fim": fim, "dur": dur, "snr": snr, "cheia": cheia,
-                          "estouro": estouro, "outra_voz": outra_voz, "nota": nota})
+                          "estouro": estouro, "outra_voz": outra_voz, "nota": nota,
+                          "falas": [tuple(x) for x in trechos_fala[i:j + 1]]})
     return saida
+
+
+def montar(audio: np.ndarray, c: dict, taxa: int = TAXA) -> np.ndarray:
+    """O áudio do trecho com as pausas longas encurtadas (a emenda cai no silêncio, suavizada)."""
+    falas = c.get("falas") or [(c["ini"], c["fim"])]
+    partes = []
+    for k, (a, b) in enumerate(falas):
+        ini = a - 0.08 if k == 0 else a - min(PAUSA_REF, a - falas[k - 1][1]) / 2
+        fim = b + 0.15 if k == len(falas) - 1 else b + min(PAUSA_REF, falas[k + 1][0] - b) / 2
+        pedaco = audio[max(0, int(ini * taxa)):int(fim * taxa)].astype(np.float32).copy()
+        rampa = min(len(pedaco) // 4, int(taxa * 0.005))
+        if rampa and k > 0:
+            pedaco[:rampa] *= np.linspace(0, 1, rampa, dtype=np.float32)
+        if rampa and k < len(falas) - 1:
+            pedaco[-rampa:] *= np.linspace(1, 0, rampa, dtype=np.float32)
+        partes.append(pedaco)
+    return np.concatenate(partes) if partes else np.zeros(0, dtype=np.float32)
 
 
 def _limpo(c: dict) -> bool:
@@ -341,7 +365,7 @@ def preparar_local(arqs: list[Path], conferir: bool = True) -> list[dict]:
         for c in escolhidos:
             if "texto" in c:
                 continue
-            texto = _conferir_palavras(audios[c["origem"]][int(c["ini"] * TAXA):int(c["fim"] * TAXA)])
+            texto = _conferir_palavras(montar(audios[c["origem"]], c))
             if texto is None:
                 ruins.append(c)
             else:
@@ -359,9 +383,7 @@ def preparar_local(arqs: list[Path], conferir: bool = True) -> list[dict]:
     for velho in destino.glob("*.wav"):
         velho.unlink()
     for i, c in enumerate(escolhidos, 1):
-        audio = audios[c["origem"]]
-        trecho = audio[max(0, int((c["ini"] - 0.08) * TAXA)):int((c["fim"] + 0.15) * TAXA)]
-        _gravar_wav(destino / f"ametista_{i:02d}.wav", _normalizar(trecho, TAXA))
+        _gravar_wav(destino / f"ametista_{i:02d}.wav", _normalizar(montar(audios[c["origem"]], c), TAXA))
         extra = f' — "{c["texto"][:70]}"' if c.get("texto") else ""
         print(f"  trecho {i}: {c['origem']} {c['ini']:.1f}-{c['fim']:.1f} s ({c['dur']:.1f} s, fundo "
               f"{c['snr']:.0f} dB abaixo da voz){extra}")
