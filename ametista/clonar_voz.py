@@ -259,7 +259,9 @@ def _conferir_palavras(trecho: np.ndarray) -> str | None:
     texto = " ".join(s.text.strip() for s in segs).strip()
     if not texto or re.search(r"\[|m[úu]sica|♪", texto, re.I):
         return None
-    if segs and (min(s.avg_logprob for s in segs) < -1.1 or max(s.no_speech_prob for s in segs) > 0.6):
+    # só descarta o que claramente não é fala: um Whisper pequeno erra palavras, mas isso não faz o trecho ruim
+    media = sum(s.avg_logprob for s in segs) / len(segs) if segs else 0.0
+    if segs and (media < -1.5 or max(s.no_speech_prob for s in segs) > 0.7):
         return None
     return texto
 
@@ -311,7 +313,7 @@ def preparar_local(arqs: list[Path], conferir: bool = True) -> list[dict]:
         sys.exit("Não achei trechos de fala nas gravações. Grave de novo, num lugar mais silencioso.")
     escolhidos: list[dict] = []
     descartados: set[tuple] = set()
-    for _ in range(3):                               # descarta o que o Whisper não entender e escolhe de novo
+    for _ in range(8):                               # descarta o que o Whisper não entender e escolhe de novo
         escolhidos = escolher([c for c in cands if (c["origem"], c["ini"]) not in descartados])
         if not conferir:
             break
@@ -327,6 +329,7 @@ def preparar_local(arqs: list[Path], conferir: bool = True) -> list[dict]:
         if not ruins:
             break
         descartados |= {(c["origem"], c["ini"]) for c in ruins}
+    escolhidos = [c for c in escolhidos if (c["origem"], c["ini"]) not in descartados]
     destino = config.VOZ_REFERENCIAS
     if destino.exists() and any(destino.glob("*.wav")):
         anterior = destino.parent / "referencia_anterior"

@@ -44,8 +44,9 @@ def main() -> int:
 
     print("3. Escolhendo os trechos de referência...", flush=True)
     escolhidos = clonar_voz.preparar_local(clonar_voz._arquivos())
-    if not escolhidos or not voz_local.referencias():
-        print("ERRO: nenhum trecho escolhido")
+    total = sum(c["dur"] for c in escolhidos)
+    if len(escolhidos) < 2 or total < 12 or not voz_local.referencias():
+        print(f"ERRO: poucos trechos escolhidos ({len(escolhidos)}, {total:.0f} s) de uns 22 s de fala limpa")
         return 1
 
     print("4. Falando com a voz clonada...", flush=True)

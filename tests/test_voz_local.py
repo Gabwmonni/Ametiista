@@ -281,9 +281,20 @@ def test_escolhe_os_trechos_limpos(tmp_path, monkeypatch):
         assert (w.getnchannels(), w.getsampwidth(), w.getframerate()) == (1, 2, 24000)
         dados = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16) / 32767
     assert 0.1 < np.max(np.abs(dados)) <= 0.9 and abs(dados[0]) < 0.01
+    # o Whisper recusando um trecho: ele sai e entra outro no lugar
+    recusados = []
+
+    def conferir(trecho):
+        if not recusados:
+            recusados.append(1)
+            return None
+        return "fala"
+    monkeypatch.setattr(clonar_voz, "_conferir_palavras", conferir)
+    de_novo = clonar_voz.preparar_local([arq], conferir=True)
+    assert len(de_novo) == 2 and all(c.get("texto") == "fala" for c in de_novo)
     # clonar de novo guarda as anteriores
     clonar_voz.preparar_local([arq], conferir=False)
-    assert len(list((tmp_path / "referencia_anterior").glob("*.wav"))) == 3
+    assert len(list((tmp_path / "referencia_anterior").glob("*.wav"))) == 2
 
 
 def test_whisper_descarta_musica(monkeypatch):
@@ -299,12 +310,16 @@ def test_whisper_descarta_musica(monkeypatch):
             return iter(self.respostas.pop(0)), None
 
     monkeypatch.setattr(clonar_voz, "_whisper", Falso([[Seg(" Eu tenho tanta coisa pra te falar.")],
-                                                       [Seg(" [Música]")], [Seg(" hmm", logprob=-1.6)], []]))
+                                                       [Seg(" [Música]")], [Seg(" hmm", logprob=-1.8)], [],
+                                                       [Seg(" palavra meio errada", logprob=-1.2)],
+                                                       [Seg(" chiado", silencio=0.9)]]))
     trecho = np.zeros(24000, dtype=np.float32)
     assert clonar_voz._conferir_palavras(trecho) == "Eu tenho tanta coisa pra te falar."
     assert clonar_voz._conferir_palavras(trecho) is None
     assert clonar_voz._conferir_palavras(trecho) is None
     assert clonar_voz._conferir_palavras(trecho) is None                      # nada entendido
+    assert clonar_voz._conferir_palavras(trecho) == "palavra meio errada"    # Whisper pequeno errando: fica
+    assert clonar_voz._conferir_palavras(trecho) is None
 
 
 def test_tom_de_voz():
