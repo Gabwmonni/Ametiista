@@ -62,6 +62,9 @@ def _ollama() -> dict:
             return _item(nome, ERRO, "é o cérebro principal, mas o Ollama está fechado (abra o Ollama)")
         return _item(nome, AVISO, "desligado (opcional: é a reserva sem internet)")
     usado = cerebro_local.modelo()
+    baixando = cerebro_local.estado_download()
+    if baixando.get("ativo"):
+        return _item(nome, AVISO, f"baixando {baixando['modelo']} em segundo plano ({baixando['pct']:.0f}%)")
     if not any(cerebro_local._mesmo(m, usado) for m in instalados):
         return _item(nome, AVISO, f"aberto, mas sem nenhum modelo (rode: ollama pull {config.OLLAMA_MODELO})")
     detalhe = f"pronto com {usado}"

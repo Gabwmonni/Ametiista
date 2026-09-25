@@ -94,6 +94,9 @@ def iniciar_servicos() -> None:
     proatividade.iniciar()
     foco.ligar()
     voz_local.aquecer()                                    # voz clonada no PC: já começa a carregar
+    from . import cerebro_local
+
+    cerebro_local.ao_abrir()                               # modelo do Ollama combinado no instalador: baixa
     rotinas.iniciar_agendador()
     arquivos.iniciar_vigia()
     semantica.aquecer(depois=memoria.vetorizar_pendentes)   # busca por significado fica pronta sozinha
@@ -322,6 +325,30 @@ async def api_voz_local():
     from . import voz_local
 
     return {**await asyncio.to_thread(voz_local.resumo), "escolhida": config.VOZ_PROVEDOR == "local"}
+
+
+@app.get("/api/ollama")
+async def api_ollama():
+    from . import cerebro_local
+
+    aberto = await asyncio.to_thread(cerebro_local.httpx_ok)
+    instalados = await asyncio.to_thread(cerebro_local.modelos_instalados, True) if aberto else []
+    return {"instalado": bool(cerebro_local._executavel()), "aberto": aberto, "modelos": instalados,
+            "desejado": config.OLLAMA_MODELO,
+            "tem_o_desejado": any(cerebro_local._mesmo(m, config.OLLAMA_MODELO) for m in instalados),
+            "usando": await asyncio.to_thread(cerebro_local.modelo) if aberto else None,
+            "download": cerebro_local.estado_download()}
+
+
+@app.post("/api/ollama/baixar")
+async def api_ollama_baixar():
+    from . import cerebro_local
+
+    if not cerebro_local._executavel() and not await asyncio.to_thread(cerebro_local.httpx_ok):
+        raise HTTPException(400, "O Ollama não está instalado: baixe em ollama.com.")
+    estado.lembrar("ollama_baixar", config.OLLAMA_MODELO)
+    comecou = await asyncio.to_thread(cerebro_local.baixar_em_segundo_plano, config.OLLAMA_MODELO)
+    return {"comecou": comecou}
 
 
 @app.get("/api/foco")

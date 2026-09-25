@@ -227,6 +227,41 @@
   }
 
   function extraCerebro() {
+    const ollama = el("div", { class: "cartao" });
+    conteudo.append(el("h2", { texto: "Ollama no PC" }), ollama);
+    let timerOllama = null;
+    const desenharOllama = async () => {
+      if (!document.body.contains(ollama)) return clearInterval(timerOllama);
+      const d = await api("/api/ollama").catch(() => null);
+      if (!d) return;
+      ollama.replaceChildren();
+      const baixando = d.download && d.download.ativo;
+      let selo, texto, botao = null;
+      if (baixando) {
+        selo = el("span", { class: "selo aviso", texto: `baixando ${Math.floor(d.download.pct)}%` });
+        texto = `Baixando ${d.download.modelo} em segundo plano (${d.download.status || "começando"}). Se a internet cair, ela continua de onde parou.`;
+      } else if (!d.instalado && !d.aberto) {
+        selo = el("span", { class: "selo", texto: "não instalado" });
+        texto = "Instale o Ollama em ollama.com para ela pensar no próprio PC (opcional).";
+      } else if (!d.aberto) {
+        selo = el("span", { class: "selo aviso", texto: "fechado" });
+        texto = "O Ollama está instalado, mas fechado. Abra o Ollama (ele fica perto do relógio).";
+      } else if (d.tem_o_desejado) {
+        selo = el("span", { class: "selo ok", texto: "pronto" });
+        texto = `Pronto com ${d.desejado}.`;
+      } else {
+        selo = el("span", { class: "selo aviso", texto: "falta o modelo" });
+        texto = `${d.desejado} ainda não está baixado` + (d.usando && d.usando !== d.desejado ? ` (por enquanto ela usa ${d.usando}).` : ".") +
+          (d.download && d.download.erro ? ` Última tentativa: ${d.download.erro}` : "");
+        botao = el("button", { class: "primario", texto: "Baixar agora", onclick: async () => {
+          await tentar(() => api("/api/ollama/baixar", {}), "Baixando em segundo plano.");
+          desenharOllama();
+        } });
+      }
+      ollama.append(el("div", { class: "linha" }, selo, el("div", { class: "cresce detalhe", texto }), botao));
+    };
+    desenharOllama();
+    timerOllama = setInterval(desenharOllama, 3000);
     conteudo.append(el("h2", { texto: "Testar" }), el("div", { class: "cartao" }, el("div", { class: "linha" },
       el("div", { class: "cresce" }, "Confere a chave e os modelos escolhidos.", el("div", { class: "detalhe", texto: "Não gasta créditos." })),
       el("button", { class: "secundario", texto: "Testar conexão", onclick: async (e) => {

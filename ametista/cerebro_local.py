@@ -9,6 +9,7 @@
 """
 import json
 import re
+import threading
 import time
 import unicodedata
 
@@ -323,7 +324,16 @@ def perguntar(texto: str, falante=None, saida=None, ficha=None, sem_nome: bool =
     return final
 
 
-# ====================================================================== instalação
+# ====================================================================== baixar o modelo (em segundo plano)
+TAMANHOS = {"qwen2.5:7b": "4,7 GB", "qwen2.5:14b": "9 GB", "qwen2.5:3b": "1,9 GB", "llama3.1:8b": "4,9 GB"}
+_download: dict = {"modelo": None, "ativo": False, "pct": 0.0, "status": "", "erro": None, "tentativa": 0}
+_trava_download = threading.Lock()
+
+
+def estado_download() -> dict:
+    return dict(_download)
+
+
 def _executavel() -> str | None:
     import os
     import shutil
@@ -335,56 +345,150 @@ def _executavel() -> str | None:
     return padrao if os.path.isfile(padrao) else None
 
 
-def preparar() -> int:
-    """Passo do instalar.bat: se o Ollama estiver instalado e o modelo não, oferece baixar. Nunca falha."""
+def httpx_ok() -> bool:
+    try:
+        return httpx.get(f"{config.OLLAMA_URL}/api/tags", timeout=1.5).status_code == 200
+    except Exception:
+        return False
+
+
+def abrir_ollama(esperar: float = 15) -> bool:
+    """Se o Ollama estiver fechado, abre o aplicativo dele (nunca um segundo servidor: dois brigam pela porta e
+    derrubam os downloads um do outro). Devolve True se ele responder."""
+    import os
     import subprocess
 
-    from . import pasta_segura
+    if httpx_ok():
+        return True
+    exe = _executavel()
+    if not exe:
+        return False
+    app = os.path.join(os.path.dirname(exe), "ollama app.exe")
+    comando = [app] if os.path.isfile(app) else [exe, "serve"]
+    try:
+        subprocess.Popen(comando, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
+                         creationflags=getattr(subprocess, "DETACHED_PROCESS", 0) |
+                         getattr(subprocess, "CREATE_NO_WINDOW", 0), close_fds=True)
+    except OSError:
+        return False
+    fim = time.time() + esperar
+    while time.time() < fim:
+        if httpx_ok():
+            return True
+        time.sleep(0.5)
+    return False
+
+
+def baixar(nome: str, tentativas: int = 10, espera_base: float = 5.0) -> bool:
+    """Baixa um modelo pela API do Ollama. Se a conexão cair, tenta de novo: o Ollama continua de onde parou."""
+    with _trava_download:
+        if _download["ativo"]:
+            return False
+        _download.update(modelo=nome, ativo=True, pct=0.0, status="começando", erro=None, tentativa=0)
+    try:
+        for tentativa in range(1, tentativas + 1):
+            _download["tentativa"] = tentativa
+            try:
+                if not httpx_ok() and not abrir_ollama():
+                    raise RuntimeError("o Ollama não está aberto")
+                with httpx.stream("POST", f"{config.OLLAMA_URL}/api/pull", json={"model": nome, "stream": True},
+                                  timeout=httpx.Timeout(30, read=600)) as r:
+                    r.raise_for_status()
+                    for linha in r.iter_lines():
+                        if not linha.strip():
+                            continue
+                        try:
+                            d = json.loads(linha)
+                        except ValueError:
+                            continue
+                        if d.get("error"):
+                            raise RuntimeError(d["error"])
+                        _download["status"] = str(d.get("status", ""))
+                        if d.get("total"):
+                            _download["pct"] = round(100 * float(d.get("completed") or 0) / float(d["total"]), 1)
+                        if d.get("status") == "success":
+                            _download.update(pct=100.0, status="pronto", erro=None)
+                            _cache["modelos"] = (0.0, [])
+                            return True
+                raise RuntimeError("a conexão com o Ollama caiu no meio")
+            except Exception as e:
+                _download["erro"] = str(e)[:200]
+                print(f"[ollama] download de {nome} (tentativa {tentativa}): {e}")
+                time.sleep(min(120.0, espera_base * 2 ** (tentativa - 1)))
+        return False
+    finally:
+        _download["ativo"] = False
+
+
+def baixar_em_segundo_plano(nome: str | None = None) -> bool:
+    """Começa a baixar o modelo sem travar nada. Devolve False se já estiver baixando ou já estiver baixado."""
+    nome = (nome or config.OLLAMA_MODELO).strip()
+    if _download["ativo"] or any(_mesmo(m, nome) for m in modelos_instalados(forcar=True)):
+        return False
+
+    def trabalho():
+        from . import avisos
+
+        if baixar(nome):
+            from . import estado
+
+            estado.lembrar("ollama_baixar", None)
+            avisos.registrar(f"O modelo {nome} terminou de baixar: o cérebro no próprio PC está pronto.",
+                             titulo="Ollama")
+        elif _download.get("erro"):
+            avisos.registrar(f"Não consegui baixar o modelo {nome}: {_download['erro']}. Ela tenta de novo na "
+                             "próxima vez que abrir.", titulo="Ollama")
+    threading.Thread(target=trabalho, daemon=True, name="ollama-download").start()
+    return True
+
+
+def ao_abrir(espera: float = 20) -> None:
+    """Na abertura da Ametista: se ficou combinado baixar o modelo (no instalador ou no painel), continua."""
+    from . import estado
+
+    pedido = estado.obter("ollama_baixar")
+    if not pedido or not _executavel():
+        return
+
+    def trabalho():
+        time.sleep(espera)                             # deixa a Ametista abrir primeiro
+        if abrir_ollama(30):
+            baixar_em_segundo_plano(str(pedido))
+    threading.Thread(target=trabalho, daemon=True, name="ollama-abrir").start()
+
+
+# ====================================================================== instalação
+def preparar() -> int:
+    """Passo do instalar.bat: nunca baixa nada aqui (4,7 GB travariam a instalação). Se o modelo faltar, combina
+    de a Ametista baixar em segundo plano, continuando de onde parar se a internet cair. Nunca falha."""
+    from . import estado, pasta_segura
 
     try:
         config.migrar_env()
         config.recarregar()
     except OSError:
         pass
-    exe = _executavel()
-    if not exe:
-        print("  Ollama não está instalado (opcional: é o cérebro no próprio PC; veja \"Cérebro local\" no LEIA-ME).")
+    if not _executavel():
+        print("  Ollama não está instalado (opcional: é o cérebro no próprio PC; veja \"Cérebro no próprio PC\" "
+              "no LEIA-ME).")
         return 0
-    if not modelos_instalados(forcar=True):
-        try:                                   # o Ollama instalado, mas fechado: abre o servidor dele
-            subprocess.Popen([exe, "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        except OSError:
-            pass
-        for _ in range(20):
-            time.sleep(0.5)
-            if httpx_ok():
-                break
     desejado = config.OLLAMA_MODELO.strip()
-    instalados = modelos_instalados(forcar=True)
-    if any(_mesmo(m, desejado) for m in instalados):
+    if not abrir_ollama():
+        print("  O Ollama está instalado, mas não respondeu. Abra o Ollama: a Ametista cuida do resto depois.")
+    elif any(_mesmo(m, desejado) for m in modelos_instalados(forcar=True)):
         print(f"  Ollama pronto com {desejado}.")
         return 0
-    if not httpx_ok():
-        print("  O Ollama está instalado, mas não abriu. Abra o Ollama e rode o instalar.bat de novo se quiser.")
+    extra = f" ({TAMANHOS[desejado]})" if desejado in TAMANHOS else ""
+    if estado.obter("ollama_baixar") == desejado:
+        print(f"  O modelo {desejado}{extra} continua baixando em segundo plano quando a Ametista estiver aberta.")
         return 0
-    tamanho = {"qwen2.5:7b": "4,7 GB", "qwen2.5:14b": "9 GB", "qwen2.5:3b": "1,9 GB", "llama3.1:8b": "4,9 GB"}
-    extra = f" ({tamanho[desejado]})" if desejado in tamanho else ""
-    if not pasta_segura.perguntar(f"  Baixar agora o modelo {desejado}{extra} para ela pensar no próprio PC? (S/N) "):
-        print(f"  Tudo bem. Quando quiser: ollama pull {desejado}")
-        return 0
-    try:
-        subprocess.run([exe, "pull", desejado], check=False)
-    except OSError as e:
-        print(f"  Não consegui baixar: {e}")
+    if pasta_segura.perguntar(f"  Baixar o modelo {desejado}{extra} em segundo plano, com a Ametista aberta? "
+                              "(continua de onde parar se a internet cair) (S/N) "):
+        estado.lembrar("ollama_baixar", desejado)
+        print("  Combinado: o download começa quando a Ametista abrir. O andamento aparece no painel > Cérebro.")
+    else:
+        print("  Tudo bem. Dá para baixar depois pelo painel > Cérebro.")
     return 0
-
-
-def httpx_ok() -> bool:
-    try:
-        return httpx.get(f"{config.OLLAMA_URL}/api/tags", timeout=1.5).status_code == 200
-    except Exception:
-        return False
 
 
 if __name__ == "__main__":

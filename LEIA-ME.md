@@ -74,7 +74,7 @@ Nada do que ela aprendeu se perde: o `.env`, as vozes cadastradas, a memória e 
    - **fecha a Ametista que estiver aberta** (senão a versão antiga continuaria rodando e você não veria nada de novo);
    - instala as bibliotecas novas e traz a memória, as vozes e as configurações de uma instalação em outra pasta;
    - se o app do celular já estava publicado, **publica a versão nova** (no celular, é só abrir o app: ele se atualiza sozinho);
-   - se o **Ollama** estiver instalado, oferece baixar o modelo novo do cérebro local (o `qwen2.5:7b`);
+   - se o **Ollama** estiver instalado, oferece baixar o modelo novo do cérebro local (o `qwen2.5:7b`) **em segundo plano**: a instalação termina na hora e o download acontece com a Ametista aberta, continuando de onde parou se a internet cair;
    - no fim, **abre a Ametista já na versão nova** e mostra "A Ametista 3.0 abriu".
 
 Na primeira vez, ela traz os fatos e lembretes da 1.0 para a memória nova (o arquivo antigo vira `dados/memoria_v1_migrada.json`).
@@ -167,7 +167,7 @@ O **rosto animado** (barra do PC e celular) mostra só o essencial, flutuando: o
 Com o Ollama, ela pensa no seu PC: as conversas não saem do computador e não gastam crédito. Ela usa as **mesmas ferramentas** do Claude (arquivos, notas, programas, limpeza, foco, lembretes, música, janelas); só ver a tela e o modo agente continuam precisando do Claude.
 
 1. Instale o Ollama em **ollama.com** (ele fica perto do relógio).
-2. Rode o `instalar.bat` de novo: ele oferece baixar o modelo (`qwen2.5:7b`, 4,7 GB). Ou, no Prompt de Comando: `ollama pull qwen2.5:7b`.
+2. Painel → **Cérebro** → **Ollama no PC** → **Baixar agora** (ou diga "sim" no `instalar.bat`). O modelo (`qwen2.5:7b`, 4,7 GB) baixa em segundo plano, com o andamento no painel; se a internet cair, continua de onde parou. Enquanto isso ela usa o Claude (ou um modelo menor que já esteja baixado).
 3. Painel → **Cérebro**:
    - **Cérebro principal: Ollama no PC** para usar sempre o Ollama (o Claude só entra se o Ollama falhar);
    - ou deixe o Claude como principal e o Ollama fica de reserva sem internet.

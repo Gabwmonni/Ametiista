@@ -1,6 +1,7 @@
 """Cérebro local (Ollama) com ferramentas, contra um Ollama falso que fala o mesmo protocolo (/api/chat em NDJSON)."""
 import json
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
@@ -16,6 +17,8 @@ class OllamaFalso:
         self.capacidades = {"qwen2.5:7b": ["completion", "tools"]}
         self.roteiro: list[list[dict]] = []          # cada item: os pedaços de uma resposta do /api/chat
         self.pedidos: list[dict] = []
+        self.pulls: list[str] = []
+        self.quedas = 0
         falso = self
 
         class Tratador(BaseHTTPRequestHandler):
@@ -42,6 +45,21 @@ class OllamaFalso:
                         return self._json({"error": "model not found"}, 404)
                     return self._json({"capabilities": falso.capacidades[pedido["model"]],
                                        "details": {"family": "qwen2"}})
+                if self.path == "/api/pull":
+                    falso.pulls.append(pedido["model"])
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/x-ndjson")
+                    self.end_headers()
+                    queda = len(falso.pulls) <= falso.quedas            # a internet cai no meio das primeiras
+                    passos = [(0, "pulling manifest"), (40, "pulling 2bada8a74506"), (80, "pulling 2bada8a74506")]
+                    for pct, status in passos:
+                        self.wfile.write((json.dumps({"status": status, "total": 100, "completed": pct}) + "\n").encode())
+                        self.wfile.flush()
+                    if queda:
+                        return
+                    falso.modelos.append(pedido["model"])
+                    self.wfile.write(b'{"status": "success"}\n')
+                    return
                 falso.pedidos.append(pedido)
                 if pedido["model"] not in falso.modelos:
                     return self._json({"error": f"model '{pedido['model']}' not found"}, 404)
@@ -77,6 +95,7 @@ def ollama(monkeypatch):
     yield o
     o.servidor.shutdown()
     cerebro_local._cache.update(modelos=(0.0, []), capacidades={})
+    cerebro_local._download.update(ativo=False, modelo=None, erro=None, pct=0.0)
 
 
 @pytest.fixture
@@ -276,3 +295,93 @@ def test_terminei_e_pausa(dono, monkeypatch):
     assert cerebro.roteador_local("pausa de dez minutos")["texto"].startswith("Pausa de 10 minutos")
     assert cerebro.roteador_local("terminei de estudar")["texto"].startswith("Sessão encerrada")
     assert cerebro.roteador_local("encerra o foco")["texto"] == "Não havia sessão de foco em andamento."
+
+
+# ---------------------------------------------------------------- baixar o modelo sem travar a instalação
+def test_download_continua_quando_a_conexao_cai(ollama):
+    ollama.modelos = []
+    ollama.quedas = 2
+    assert cerebro_local.baixar("qwen2.5:7b", espera_base=0.01)
+    d = cerebro_local.estado_download()
+    assert d["tentativa"] == 3 and d["pct"] == 100.0 and not d["ativo"] and d["erro"] is None
+    assert ollama.pulls == ["qwen2.5:7b"] * 3 and cerebro_local.modelo() == "qwen2.5:7b"
+    assert not cerebro_local.baixar_em_segundo_plano("qwen2.5:7b")          # já está baixado
+
+
+def test_download_desiste_depois_de_muitas_quedas(ollama):
+    ollama.modelos = []
+    ollama.quedas = 99
+    assert not cerebro_local.baixar("qwen2.5:7b", tentativas=3, espera_base=0.01)
+    d = cerebro_local.estado_download()
+    assert not d["ativo"] and "caiu" in d["erro"] and d["pct"] == 80.0
+
+
+def test_instalador_nao_baixa_nem_abre_outro_servidor(ollama, monkeypatch, capsys):
+    import subprocess
+
+    from ametista import estado, pasta_segura
+
+    ollama.modelos = []
+    monkeypatch.setenv("OLLAMA_URL", ollama.url)                            # o instalador relê o .env
+    monkeypatch.setenv("OLLAMA_MODELO", "qwen2.5:7b")
+    monkeypatch.setattr(cerebro_local, "_executavel", lambda: "C:/Ollama/ollama.exe")
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: pytest.fail("abriu outro servidor do Ollama"))
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: pytest.fail("baixou dentro do instalador"))
+    monkeypatch.setattr(pasta_segura, "perguntar", lambda texto: True)
+    assert cerebro_local.preparar() == 0
+    assert estado.obter("ollama_baixar") == "qwen2.5:7b" and ollama.pulls == []
+    assert "o download começa quando a Ametista abrir" in capsys.readouterr().out
+    assert cerebro_local.preparar() == 0                                     # de novo: não pergunta outra vez
+    assert "continua baixando em segundo plano" in capsys.readouterr().out
+    ollama.modelos = ["qwen2.5:7b"]
+    cerebro_local._cache["modelos"] = (0.0, [])
+    assert cerebro_local.preparar() == 0 and "Ollama pronto com qwen2.5:7b" in capsys.readouterr().out
+
+
+def test_abrir_ollama_usa_o_aplicativo(tmp_path, monkeypatch):
+    import subprocess
+
+    (tmp_path / "ollama.exe").write_text("")
+    (tmp_path / "ollama app.exe").write_text("")
+    monkeypatch.setattr(cerebro_local, "_executavel", lambda: str(tmp_path / "ollama.exe"))
+    monkeypatch.setattr(cerebro_local, "httpx_ok", lambda: False)
+    abertos = []
+    monkeypatch.setattr(subprocess, "Popen", lambda cmd, **k: abertos.append(cmd))
+    assert not cerebro_local.abrir_ollama(esperar=0.1)
+    assert abertos == [[str(tmp_path / "ollama app.exe")]]
+    monkeypatch.setattr(cerebro_local, "httpx_ok", lambda: True)
+    assert cerebro_local.abrir_ollama() and len(abertos) == 1                # já aberto: não abre nada
+
+
+def test_ametista_retoma_o_download_ao_abrir(monkeypatch):
+    import threading
+
+    from ametista import estado
+
+    estado.lembrar("ollama_baixar", "qwen2.5:7b")
+    monkeypatch.setattr(cerebro_local, "_executavel", lambda: "ollama.exe")
+    monkeypatch.setattr(cerebro_local, "abrir_ollama", lambda esperar=15: True)
+    pedido = threading.Event()
+    monkeypatch.setattr(cerebro_local, "baixar_em_segundo_plano", lambda nome=None: pedido.set() or True)
+    cerebro_local.ao_abrir(espera=0)
+    assert pedido.wait(5)
+
+
+def test_painel_mostra_e_comeca_o_download(ollama, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from ametista import servidor
+
+    ollama.modelos = ["qwen2.5:3b"]
+    ollama.capacidades["qwen2.5:3b"] = ["completion", "tools"]
+    monkeypatch.setattr(cerebro_local, "_executavel", lambda: "ollama.exe")
+    with TestClient(servidor.app, base_url="http://127.0.0.1:8765") as c:
+        c.headers.update({"X-Ametista-Token": servidor.TOKEN})
+        d = c.get("/api/ollama").json()
+        assert d["aberto"] and not d["tem_o_desejado"] and d["usando"] == "qwen2.5:3b"
+        assert c.post("/api/ollama/baixar").json() == {"comecou": True}
+        for _ in range(100):
+            if "qwen2.5:7b" in ollama.modelos and not cerebro_local.estado_download()["ativo"]:
+                break
+            time.sleep(0.05)
+        assert c.get("/api/ollama").json()["tem_o_desejado"]
