@@ -169,10 +169,16 @@ def _f0(quadro: np.ndarray, taxa: int) -> float | None:
         return None
     ac /= ac[0]
     lo, hi = int(taxa / 450), int(taxa / 70)
-    if hi >= len(ac):
+    if hi + 1 >= len(ac):
         return None
-    lag = lo + int(np.argmax(ac[lo:hi]))
-    return taxa / lag if ac[lag] > 0.45 else None
+    faixa = ac[lo:hi]
+    maior = float(faixa.max())
+    if maior <= 0.45:
+        return None
+    # o primeiro pico quase tão alto quanto o maior: evita confundir o tom com a oitava de baixo
+    picos = np.where((faixa[1:-1] >= faixa[:-2]) & (faixa[1:-1] >= faixa[2:]) & (faixa[1:-1] >= 0.9 * maior))[0]
+    lag = lo + 1 + int(picos[0]) if len(picos) else lo + int(np.argmax(faixa))
+    return taxa / lag
 
 
 def _tons(audio: np.ndarray, taxa: int, ini: float, fim: float) -> list[float]:
@@ -220,7 +226,11 @@ def candidatos(audio: np.ndarray, taxa: int, trechos_fala: list[tuple[float, flo
             amostras = audio[int(ini * taxa):int(fim * taxa)]
             estouro = float(np.mean(np.abs(amostras) > 0.98))
             tons = _tons(audio, taxa, ini, fim)
-            outra_voz = float(np.mean([abs(np.log2(f / tom_tipico)) > 0.55 for f in tons])) if tons and tom_tipico else 0.0
+            outra_voz = 0.0
+            if tons and tom_tipico:
+                desvios = np.abs(np.log2(np.asarray(tons) / tom_tipico))
+                # outra pessoa: o tom do trecho inteiro fica longe do tom da gravação (ou boa parte dele fica)
+                outra_voz = 1.0 if abs(np.log2(np.median(tons) / tom_tipico)) > 0.45 else float(np.mean(desvios > 0.7))
             variacao = float(np.std(dentro))
             nota = snr + 12 * cheia - 400 * estouro - 30 * outra_voz - 0.3 * max(0.0, variacao - 8) + 0.3 * dur
             saida.append({"origem": origem, "ini": ini, "fim": fim, "dur": dur, "snr": snr, "cheia": cheia,
@@ -228,17 +238,27 @@ def candidatos(audio: np.ndarray, taxa: int, trechos_fala: list[tuple[float, flo
     return saida
 
 
+def _limpo(c: dict) -> bool:
+    return c["snr"] >= 18 and c["estouro"] < 0.002 and c["outra_voz"] < 0.15
+
+
 def escolher(cands: list[dict], alvo_s: float = ALVO_S, max_trechos: int = MAX_TRECHOS) -> list[dict]:
-    """Os melhores trechos sem sobreposição, até juntar uns 26 s (só os limpos, se houver o bastante)."""
-    bons = [c for c in cands if c["snr"] >= 18 and c["estouro"] < 0.002 and c["outra_voz"] < 0.15]
-    lista = sorted(bons if sum(c["dur"] for c in bons) >= 12 else cands, key=lambda c: -c["nota"])
+    """Os melhores trechos sem sobreposição, até juntar uns 26 s. Primeiro só os limpos; os outros só completam
+    se os limpos (sem contar sobreposições) não chegarem a 12 s."""
     escolhidos: list[dict] = []
-    for c in lista:
-        if any(c["origem"] == e["origem"] and c["ini"] < e["fim"] + 0.3 and e["ini"] < c["fim"] + 0.3
-               for e in escolhidos):
-            continue
-        escolhidos.append(c)
-        if sum(e["dur"] for e in escolhidos) >= alvo_s or len(escolhidos) >= max_trechos:
+
+    def total() -> float:
+        return sum(e["dur"] for e in escolhidos)
+
+    for grupo in ([c for c in cands if _limpo(c)], [c for c in cands if not _limpo(c)]):
+        for c in sorted(grupo, key=lambda c: -c["nota"]):
+            if total() >= alvo_s or len(escolhidos) >= max_trechos:
+                return escolhidos
+            if any(c["origem"] == e["origem"] and c["ini"] < e["fim"] + 0.3 and e["ini"] < c["fim"] + 0.3
+                   for e in escolhidos):
+                continue
+            escolhidos.append(c)
+        if total() >= 12:
             break
     return escolhidos
 

@@ -297,6 +297,21 @@ def test_escolhe_os_trechos_limpos(tmp_path, monkeypatch):
     assert len(list((tmp_path / "referencia_anterior").glob("*.wav"))) == 2
 
 
+def test_candidatos_sobrepostos_nao_contam_duas_vezes():
+    def cand(ini, fim, limpo=True, nota=30.0):
+        return {"origem": "a", "ini": ini, "fim": fim, "dur": fim - ini, "snr": 30 if limpo else 10,
+                "estouro": 0.0, "outra_voz": 0.0, "nota": nota}
+    # vários candidatos limpos em cima do mesmo pedaço (somam mais de 12 s, mas é um trecho só) e o resto da
+    # fala com o fundo um pouco mais alto: o resto entra para completar
+    cands = [cand(0, 6), cand(0.5, 6.5, nota=29), cand(0, 7, nota=28), cand(1, 7.5, nota=27),
+             cand(8, 15, limpo=False, nota=20), cand(16, 22, limpo=False, nota=19)]
+    esc = clonar_voz.escolher(cands)
+    assert [(c["ini"], c["fim"]) for c in esc] == [(0, 6), (8, 15), (16, 22)]
+    # limpos de sobra: os com fundo mais alto ficam de fora
+    cands = [cand(0, 7), cand(8, 15), cand(16, 22, limpo=False, nota=40)]
+    assert [(c["ini"], c["fim"]) for c in clonar_voz.escolher(cands)] == [(0, 7), (8, 15)]
+
+
 def test_whisper_descarta_musica(monkeypatch):
     class Seg:
         def __init__(self, texto, logprob=-0.3, silencio=0.05):
@@ -325,6 +340,9 @@ def test_whisper_descarta_musica(monkeypatch):
 def test_tom_de_voz():
     t = np.arange(960) / 24000
     assert abs(clonar_voz._f0(np.sin(2 * np.pi * 220 * t).astype(np.float32), 24000) - 220) < 8
+    # voz com harmônicos fortes: o tom é o de baixo mais alto, não a oitava abaixo
+    voz = sum(np.sin(2 * np.pi * 230 * k * t) / k for k in range(1, 6)).astype(np.float32)
+    assert abs(clonar_voz._f0(voz, 24000) - 230) < 10
     assert clonar_voz._f0(np.zeros(960, dtype=np.float32), 24000) is None
 
 
