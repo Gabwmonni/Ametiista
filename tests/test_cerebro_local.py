@@ -375,6 +375,11 @@ def test_painel_mostra_e_comeca_o_download(ollama, monkeypatch):
     ollama.modelos = ["qwen2.5:3b"]
     ollama.capacidades["qwen2.5:3b"] = ["completion", "tools"]
     monkeypatch.setattr(cerebro_local, "_executavel", lambda: "ollama.exe")
+    monkeypatch.setattr(servidor, "iniciar_servicos", lambda: None)          # sem os vigias de verdade
+    from ametista import eventos
+
+    monkeypatch.setattr(eventos, "_loop", None)                             # o laço do servidor de teste some
+    monkeypatch.setattr(eventos, "_transmissor", None)                      # no fim: os próximos testes não usam
     with TestClient(servidor.app, base_url="http://127.0.0.1:8765") as c:
         c.headers.update({"X-Ametista-Token": servidor.TOKEN})
         d = c.get("/api/ollama").json()
