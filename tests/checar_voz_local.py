@@ -46,6 +46,12 @@ def main() -> int:
     escolhidos = clonar_voz.preparar_local(clonar_voz._arquivos())
     total = sum(c["dur"] for c in escolhidos)
     if len(escolhidos) < 2 or total < 12 or not voz_local.referencias():
+        a24, a16 = clonar_voz._decodificar(amostra, 24000), clonar_voz._decodificar(amostra, 16000)
+        falas = clonar_voz.falas(a16)
+        print("   falas:", [(round(x, 2), round(y, 2)) for x, y in falas])
+        for c in sorted(clonar_voz.candidatos(a24, 24000, falas, amostra.name), key=lambda c: c["ini"]):
+            print("   candidato", {k: (round(v, 3) if isinstance(v, float) else v) for k, v in c.items() if k != "falas"},
+                  "limpo" if clonar_voz._limpo(c) else "")
         print(f"ERRO: poucos trechos escolhidos ({len(escolhidos)}, {total:.0f} s) de uns 22 s de fala limpa")
         return 1
 

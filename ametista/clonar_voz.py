@@ -300,17 +300,22 @@ def _conferir_palavras(trecho: np.ndarray) -> str | None:
         segs = list(segs)
     except Exception:
         return ""                                    # sem Whisper: fica só a análise do som
+    global motivo
     texto = " ".join(s.text.strip() for s in segs).strip()
     if not texto or re.search(r"\[|m[úu]sica|♪", texto, re.I):
+        motivo = f"o Whisper ouviu {texto!r}" if texto else "o Whisper não achou fala"
         return None
     # só descarta o que claramente não é fala: um Whisper pequeno erra palavras, mas isso não faz o trecho ruim
     media = sum(s.avg_logprob for s in segs) / len(segs) if segs else 0.0
-    if segs and (media < -1.5 or max(s.no_speech_prob for s in segs) > 0.7):
+    silencio = max(s.no_speech_prob for s in segs) if segs else 0.0
+    if segs and (media < -1.5 or silencio > 0.7):
+        motivo = f"fala pouco clara para o Whisper (confiança {media:.1f}, chance de não ser fala {silencio:.0%})"
         return None
     return texto
 
 
 _whisper = None
+motivo = ""
 
 
 def _normalizar(trecho: np.ndarray, taxa: int) -> np.ndarray:
@@ -368,6 +373,7 @@ def preparar_local(arqs: list[Path], conferir: bool = True) -> list[dict]:
             texto = _conferir_palavras(montar(audios[c["origem"]], c))
             if texto is None:
                 ruins.append(c)
+                print(f"  (deixei de fora {c['origem']} {c['ini']:.1f}-{c['fim']:.1f} s: {motivo})")
             else:
                 c["texto"] = texto
         if not ruins:
