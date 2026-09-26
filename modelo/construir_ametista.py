@@ -342,8 +342,6 @@ def olho(lado, pai):
         F = [[i, i + 1, n + i + 1, n + i] for i in range(n - 1)]
         return V, F
 
-    partes = {}
-
     def montar(cima, baixo, fechar_cilios=None, espessura=1.0, iris_dx=0.0, iris_dy=0.0, pupila=1.0,
                baixo_some=False, vinco_desce=0.0):
         """Todas as partes do olho para um formato de pálpebras (a base e cada shape key)."""
@@ -502,7 +500,7 @@ def sobrancelhas(pai):
 
 
 # ====================================================================== boca
-BOCA_Z, BOCA_M = -0.69, 0.062
+BOCA_Z, BOCA_M = -0.695, 0.07
 
 
 def boca(pai):
@@ -549,11 +547,11 @@ def boca(pai):
         J.add(V, F, mat)
     pos = lambda p: np.vstack([V for _, V, _ in p])
     alvos = {
-        "boca_a": pos(forma(w=1.05, cima=0.012, baixo=0.115, cantos=0.0)),
-        "boca_e": pos(forma(w=1.2, cima=0.012, baixo=0.065, cantos=0.004)),
-        "boca_i": pos(forma(w=1.32, cima=0.006, baixo=0.035, cantos=0.01)),
-        "boca_o": pos(forma(w=0.7, cima=0.03, baixo=0.085, cantos=0.0, redonda=0.5)),
-        "boca_u": pos(forma(w=0.48, cima=0.022, baixo=0.05, cantos=0.0)),
+        "boca_a": pos(forma(w=1.05, cima=0.014, baixo=0.13, cantos=0.0)),
+        "boca_e": pos(forma(w=1.2, cima=0.013, baixo=0.075, cantos=0.004)),
+        "boca_i": pos(forma(w=1.32, cima=0.007, baixo=0.04, cantos=0.01)),
+        "boca_o": pos(forma(w=0.7, cima=0.034, baixo=0.1, cantos=0.0, redonda=0.5)),
+        "boca_u": pos(forma(w=0.48, cima=0.025, baixo=0.058, cantos=0.0)),
         "sorriso": pos(forma(w=1.25, cantos=0.05)),
         "triste": pos(forma(w=0.95, cantos=-0.032)),
         "bravo": pos(forma(w=1.1, cima=0.004, baixo=0.022, cantos=-0.024)),
@@ -1039,6 +1037,12 @@ def exportar():
     from compactar_glb import compactar
     compactar(glb)                   # bem mais leve para o app (16 bits), sem mudar nada do que aparece
     shutil.copyfile(glb, os.path.join(RAIZ, "celular", "public", "ametista.glb"))
+    try:                             # o celular baixa a versão nova (a impressão digital da casca muda)
+        sys.path.insert(0, RAIZ)
+        from ametista import publicar_celular
+        publicar_celular.atualizar_sw()
+    except Exception as e:
+        print(f"(atualize o celular/public/sw.js com o python da Ametista: {e})")
     return blend, glb
 
 

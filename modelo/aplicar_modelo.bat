@@ -11,6 +11,7 @@ if not exist "modelo\exportado.glb" (
 call .venv\Scripts\activate.bat
 python modelo\compactar_glb.py modelo\exportado.glb web\ametista.glb || (pause & exit /b 1)
 copy /y web\ametista.glb celular\public\ametista.glb >nul
+python -c "from ametista import publicar_celular as p; p.atualizar_sw()"
 echo.
 echo  Pronto! Feche e abra a Ametista para ver o modelo novo na barra.
 echo  Para o celular: publicar_celular.bat
