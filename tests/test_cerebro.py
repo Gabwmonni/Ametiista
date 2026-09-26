@@ -294,9 +294,12 @@ def test_sem_frase_de_espera_se_ela_ja_falou_ou_a_ferramenta_e_rapida(claude, do
 
 
 def test_frase_de_espera_na_busca_na_web(claude, dono):
-    busca = SimpleNamespace(type="server_tool_use", id="srvtoolu_1", name="web_search", input={"query": "chuva"})
-    claude.roteiro = [Resposta(["Vai chover amanhã à tarde."], [busca, texto("Vai chover amanhã à tarde.")])]
+    # (sem "vai chover" e afins: com internet o roteador local responde o clima sozinho)
+    busca = SimpleNamespace(type="server_tool_use", id="srvtoolu_1", name="web_search", input={"query": "jogo"})
+    claude.roteiro = [Resposta(["O Palmeiras ganhou de dois a um."], [busca, texto("O Palmeiras ganhou de dois a um.")])]
     saida = SaidaFalsa()
-    cerebro.pensar("pesquisa se vai chover amanhã em Campinas", saida=saida)
+    pedido = "pesquisa quem ganhou o jogo do Palmeiras ontem"
+    assert cerebro.roteador_local(pedido) is None
+    cerebro.pensar(pedido, saida=saida)
     primeira, resto = saida.tudo.split("\n", 1)
-    assert primeira in cerebro._FRASES_ESPERA["pesquisa"] and resto == "Vai chover amanhã à tarde."
+    assert primeira in cerebro._FRASES_ESPERA["pesquisa"] and resto == "O Palmeiras ganhou de dois a um."
