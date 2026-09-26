@@ -76,6 +76,38 @@ def medir(o: "ouvido.Ouvido", pcm: bytes) -> tuple[float, str]:
     return pedidos[0][0] - fim_da_fala, pedidos[0][1]
 
 
+def nome_pausa_e_pedido(o: "ouvido.Ouvido", pcm_nome: bytes, pcm_pedido: bytes) -> str:
+    """ "Ametista" (o nome já detectado), uma pausa longa e o pedido dito enquanto ela ainda processa o nome."""
+    bloco = ouvido.AMOSTRAS * 2
+    silencio = bytes(bloco)
+    pedidos = []
+    o.atender = lambda texto, falante, sem_nome=False: pedidos.append(texto) or {}
+    for _ in range(12):
+        o.alimentar(silencio)
+    o._iniciar_gravacao("nome", [])
+    proximo = time.perf_counter()
+
+    def no_ritmo(dados: bytes) -> None:
+        nonlocal proximo
+        o.alimentar(dados)
+        proximo += ouvido.DUR
+        time.sleep(max(0.0, proximo - time.perf_counter()))
+
+    for i in range(0, len(pcm_nome) - bloco + 1, bloco):
+        no_ritmo(pcm_nome[i:i + bloco])
+    while o.estado != "processando":
+        no_ritmo(silencio)
+    for i in range(0, len(pcm_pedido) - bloco + 1, bloco):   # começa a falar logo: ela ainda está transcrevendo
+        no_ritmo(pcm_pedido[i:i + bloco])
+    limite = time.perf_counter() + 20
+    while not pedidos and time.perf_counter() < limite:
+        no_ritmo(silencio)
+    while o.estado == "processando":
+        time.sleep(0.02)
+    o.estado = "espera"
+    return pedidos[0] if pedidos else ""
+
+
 def main() -> int:
     from faster_whisper import WhisperModel
 
@@ -125,6 +157,13 @@ def main() -> int:
         print("FALHOU: não ficou mais rápido")
         return 1
     print(f"OK: ela entende {media_a - media_n:.2f} s mais rápido ({(1 - media_n / media_a) * 100:.0f}% menos espera)")
+
+    # "Ametista" ... pausa ... pedido: o pedido dito enquanto ela processa o nome não se perde
+    pedido = nome_pausa_e_pedido(novo, pcm_da_frase("Ametista."), pcm_da_frase("Que horas são agora?"))
+    print(f"'Ametista', pausa e o pedido logo em seguida: entendeu {pedido!r}")
+    if "horas" not in pedido.lower():
+        print("FALHOU: o pedido dito depois da pausa se perdeu")
+        return 1
 
     # o teste da placa (processo à parte) roda e responde certo: aqui não há placa NVIDIA
     t = time.time()

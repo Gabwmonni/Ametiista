@@ -18,9 +18,10 @@ import pypdf  # noqa: E402,F401  (biblioteca nova da 3.0 instalada pelo instalar
 from ametista import config, ferramentas, memoria  # noqa: E402
 
 texto = (pasta / ".env").read_text(encoding="utf-8")
-assert texto.startswith("# versão das configurações: 3\n"), texto[:200]
+assert texto.startswith(f"# versão das configurações: {config.VERSAO_CONFIG}\n"), texto[:200]
 assert config.CIDADE == "Jundiaí" and config.VOZ_TOM == "+4Hz", "o que a pessoa escolheu continua"
 assert config.OLLAMA_MODELO == "qwen2.5:7b", "o modelo padrão antigo do Ollama passou para o novo"
+assert config.WHISPER_DISPOSITIVO == "auto", "o Whisper passou a usar a placa NVIDIA quando ela funciona"
 assert config.FOCO_TOLERANCIA_MIN == 3 and config.CEREBRO_PRINCIPAL == "claude", "opções novas no padrão"
 memoria.db()
 assert memoria.fatos() == ["Gabriel estuda engenharia"], memoria.fatos()
