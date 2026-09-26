@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Blender (módulo bpy)
-        run: pip install bpy==5.0.1 numpy pytest
+        run: pip install bpy==5.0.1 numpy==1.26.4 pytest
       - name: Reconstruir a Ametista do zero
         run: |
           cp web/ametista.glb /tmp/antes.glb
