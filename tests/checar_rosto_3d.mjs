@@ -1,5 +1,6 @@
-// O rosto 3D de verdade num navegador (Chromium com WebGL por software): o modelo carrega, os olhos têm a íris
-// azul e ela some ao piscar, a boca abre ao falar, nada dá erro; e, sem WebGL, entra o rosto de reserva.
+// O rosto 3D de verdade num navegador (Chromium com WebGL por software): o modelo e as texturas carregam, os olhos
+// têm a íris azul-lilás e ela some ao piscar, a boca abre ao falar, a cabeça vira, nada dá erro; e, sem WebGL,
+// entra o rosto de reserva.
 // Uso: node tests/checar_rosto_3d.mjs      (precisa do pacote playwright; no CI: npm install playwright)
 import http from "node:http";
 import fs from "node:fs";
@@ -41,27 +42,40 @@ const ok = (cond, msg) => { console.log(`${cond ? "ok   " : "FALHA"} ${msg}`); i
   const malha = await p.evaluate(() => Rosto.estado.malha);
   ok(malha && malha.triangulos > 10000, `modelo carregado (${malha && malha.triangulos} triângulos)`);
   const contar = (forcar, modo = "ocioso") => p.evaluate(async ([f, m]) => {
-    Rosto.modo(m); Rosto.emocao("neutra"); Rosto.forcar(f);
+    Rosto.modo(m); Rosto.emocao("neutra"); Rosto.forcar(Object.assign({ quieto: true, quadro: [0, 0.69, 0.3] }, f));
+    // (a íris é contada numa faixa em volta dos olhos: os cristais também são lilases)
     await new Promise((r) => setTimeout(r, 700));
     const c = document.getElementById("rosto");
     const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
-    let iris = 0, boca = 0, pintados = 0;
+    let iris = 0, boca = 0, pintados = 0, claro = 0, soma = 0;
     for (let i = 0; i < d.length; i += 4) {
       const [r, g, b, a] = [d[i], d[i + 1], d[i + 2], d[i + 3]];
+      const px = (i / 4) % c.width, py = Math.floor(i / 4 / c.width);
+      const miolo = px > c.width * 0.12 && px < c.width * 0.88 && py > c.height * 0.12 && py < c.height * 0.88;
+      const faixaOlhos = miolo && Math.abs(py - c.height / 2) < c.height * 0.12;
       if (a < 230) continue;                                                  // só o que é opaco (não o brilho em volta)
       pintados++;
-      if (b > 150 && r < 110 && b - r > 90) iris++;                          // azul da íris
-      if (r > 60 && r < 150 && g < 45 && b < 95 && r > b) boca++;             // o escuro da boca
+      if (faixaOlhos && b > 170 && b - r > 35 && b - g > 30) iris++;         // o azul-lilás da íris
+      if (r > 30 && r < 150 && g < 55 && b < 75 && r > b + 4) boca++;         // o escuro da boca por dentro
+      const lum = (r + g + b) / 3;
+      if (r > 150 && g > 120 && b > 150) claro++;                            // a pele e o cabelo claros
+      soma += lum;
     }
-    return { iris, boca, pintados, total: d.length / 4 };
+    return { iris, boca, pintados, claro, total: d.length / 4 };
   }, [forcar, modo]);
+  const OLHOS = [0, 0.718, 0.25];                         // os dois olhos no meio do quadro
   const aberto = await contar({ piscar: 0, boca: 0, olhar: [0, 0] });
+  const olhosAbertos = await contar({ piscar: 0, boca: 0, olhar: [0, 0], quadro: OLHOS });
   ok(aberto.pintados > aberto.total * 0.55, `a moldura e ela aparecem (${aberto.pintados} de ${aberto.total} pixels)`);
-  ok(aberto.iris > 60, `olhos abertos: íris azul (${aberto.iris} pixels)`);
-  const fechado = await contar({ piscar: 1, boca: 0, olhar: [0, 0] });
-  ok(fechado.iris < aberto.iris * 0.15, `piscando: a íris some (${fechado.iris} pixels)`);
+  ok(olhosAbertos.iris > 120, `olhos abertos: íris azul (${olhosAbertos.iris} pixels)`);
+  const fechado = await contar({ piscar: 1, boca: 0, olhar: [0, 0], quadro: OLHOS });
+  ok(fechado.iris < olhosAbertos.iris * 0.15, `piscando: a íris some (${olhosAbertos.iris} → ${fechado.iris} pixels)`);
   const falando = await contar({ piscar: 0, boca: 1, olhar: [0, 0] }, "falando");
   ok(falando.boca > aberto.boca + 25, `falando: a boca abre (${aberto.boca} → ${falando.boca} pixels escuros)`);
+  ok(aberto.claro > aberto.total * 0.25, `a pele e o cabelo claros dela aparecem (${aberto.claro} pixels)`);
+  const virada = await contar({ piscar: 0, boca: 0, olhar: [0, 0], cabeca: { yaw: 0.35, pitch: 0, roll: 0 } });
+  ok(virada.iris > 30 && Math.abs(virada.claro - aberto.claro) < aberto.claro * 0.35,
+     `a cabeça vira e ela continua inteira (íris ${virada.iris}, claros ${virada.claro})`);
   ok(!erros.length, `sem erros no navegador ${erros.length ? JSON.stringify(erros.slice(0, 3)) : ""}`);
   await p.close();
 }

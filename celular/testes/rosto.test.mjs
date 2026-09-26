@@ -1,5 +1,6 @@
-// Rosto 3D: roda o motor de verdade (leitura do .glb, shape keys, animação) num WebGL e num canvas falsos,
-// com o modelo de verdade (web/ametista.glb). O desenho em si é conferido no navegador pelo CI (checar_rosto_3d).
+// Rosto 3D: roda o motor de verdade (leitura do .glb, texturas, ossos, shape keys, animação) num WebGL e num canvas
+// falsos, com o modelo de verdade (web/ametista.glb). O desenho em si é conferido no navegador pelo CI
+// (checar_rosto_3d).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -41,7 +42,8 @@ function carregarRosto({ semWebGL = false, modeloFalta = false } = {}) {
     requestAnimationFrame: (f) => (quadros.push(f), quadros.length),
     cancelAnimationFrame: nada,
     setTimeout: (f) => (quadros.push(() => f()), 1), clearTimeout: nada, Math, console: { warn: nada, log: nada },
-    TextDecoder, DataView, Float32Array, Uint8Array, Uint16Array, Uint32Array, Int8Array, Int16Array, JSON,
+    TextDecoder, DataView, Float32Array, Uint8Array, Uint16Array, Uint32Array, Int8Array, Int16Array, JSON, Promise,
+    Blob, createImageBitmap: async (blob) => { janela.imagens = (janela.imagens || 0) + 1; return { width: 1024, height: 1024, tipo: blob.type, close() {} }; },
     fetch: async (url) => {
       janela.pediu = url;
       if (modeloFalta) return { ok: false, status: 404 };
@@ -71,7 +73,10 @@ test("lê o modelo de verdade: malha, cabeça e todas as expressões", async () 
   assert.equal(scripts.length, 0, "não precisou do rosto de reserva");
   const m = Rosto.estado.malha;
   assert.ok(m && m.triangulos > 10000 && m.triangulos < 40000, `triângulos: ${m && m.triangulos}`);
-  assert.ok(m.cabeca, "tem o nó Cabeca (o pescoço)");
+  assert.ok(m.cabeca, "tem o osso da cabeça");
+  for (const o of ["raiz", "peito", "pescoco", "cabeca"]) assert.ok(m.ossos.includes(o), `falta o osso ${o}`);
+  assert.equal(janela.imagens, 2, "as duas texturas (o corpo e o rosto) foram lidas");
+  assert.ok(m.brilhos > 0, "tem os pontos de brilho dos cristais");
   for (const nome of ["piscar_direito", "piscar_esquerdo", "olhos_felizes", "arregalar", "olhar_esquerda",
     "olhar_direita", "olhar_cima", "olhar_baixo", "boca_a", "boca_e", "boca_i", "boca_o", "boca_u", "sorriso",
     "triste", "bravo", "sobrancelhas_cima", "sobrancelhas_bravas", "sobrancelhas_tristes", "sobrancelha_pensativa"])

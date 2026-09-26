@@ -23,9 +23,10 @@ def test_service_worker_tem_a_impressao_digital_dos_arquivos_atuais():
 
 
 def test_app_leve():
-    """O que o celular baixa na primeira vez (compactado, como o Cloudflare entrega) continua pequeno: o código
-    do app, o modelo 3D dela e o ícone (que ficam guardados no celular depois da primeira vez). O rosto de
-    reserva (rosto2d.js e a ilustração) só é baixado por aparelhos sem WebGL."""
+    """O que o celular baixa na primeira vez (compactado, como o Cloudflare entrega) não passa do combinado: o
+    código do app, o modelo 3D dela (o busto com as duas texturas; é a maior parte) e o ícone. Tudo fica guardado
+    no celular depois da primeira vez. O rosto de reserva (rosto2d.js e a ilustração) só é baixado por aparelhos
+    sem WebGL."""
     from ametista import publicar_celular
 
     publico = RAIZ / "celular" / "public"
@@ -33,9 +34,9 @@ def test_app_leve():
     casca = [n for n in publicar_celular.CASCA] + ["sw.js"]
     codigo = sum(tamanho[n] for n in casca if not n.endswith((".png", ".webp", ".jpg", ".glb")))
     assert codigo < 30_000, f"o código do app do celular cresceu para {codigo} bytes (compactado)"
-    assert tamanho["ametista.glb"] < 220_000, f"o modelo 3D dela ficou pesado: {tamanho['ametista.glb']} bytes"
+    assert tamanho["ametista.glb"] < 800_000, f"o modelo 3D dela ficou pesado: {tamanho['ametista.glb']} bytes"
     assert tamanho["ametista-retrato.webp"] < 40_000, "a ilustração de reserva ficou pesada"
     primeira_vez = sum(tamanho[n] for n in casca)
-    assert primeira_vez < 280_000, f"a primeira abertura do app cresceu para {primeira_vez} bytes (compactado)"
+    assert primeira_vez < 860_000, f"a primeira abertura do app cresceu para {primeira_vez} bytes (compactado)"
     html = (publico / "index.html").read_text(encoding="utf-8")
     assert "fonts.googleapis" not in html and "http" not in re.sub(r"<!--.*?-->", "", html, flags=re.S)

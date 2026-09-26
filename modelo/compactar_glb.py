@@ -1,8 +1,9 @@
 """Deixa o .glb exportado pelo Blender bem mais leve para o app, sem mudar nada do que aparece.
 
 - posições e shape keys em 16 bits (KHR_mesh_quantization, o jeito padrão do glTF para isso);
-- normais em 8 bits, e nenhuma normal nas partes "desenhadas" por cima do rosto (olhos, boca...), que não usam;
-- cores dos vértices em 8 bits.
+- coordenadas da textura em 16 bits, ossos e pesos em 8 bits, normais (se o material usar luz) em 8 bits;
+- a pintura (a textura) vai como está (o Blender já exporta em WebP);
+- materiais com transparência (cílios, íris, brilhos, rubor) marcados como tal.
 
 Uso: python modelo/compactar_glb.py web/ametista.glb  [saída.glb]
 (o construir_ametista.py já faz isso sozinho; use à mão depois de exportar do Blender, se quiser.)
@@ -13,13 +14,11 @@ import sys
 
 import numpy as np
 
-COMP = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}
+COMP = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
 TIPO = {5120: np.int8, 5121: np.uint8, 5122: np.int16, 5123: np.uint16, 5125: np.uint32, 5126: np.float32}
 MAXN = {5120: 127, 5121: 255, 5122: 32767, 5123: 65535}
-# materiais "desenhados" por cima do rosto (sem luz: não precisam de normais) — o mesmo contrato do rosto.js
-PLANOS = ("pele_sombra", "nariz", "blush", "sombra_olho", "labio", "vinco", "olho_branco", "iris", "iris_estrela",
-          "pupila", "brilho_olho", "cilios_baixo", "cilios", "sobrancelha", "boca_dentro", "dentes", "lingua",
-          "linha_boca")
+# materiais com partes transparentes (o mesmo contrato do rosto.js)
+TRANSPARENTES = ("cilios", "iris", "brilho", "blush")
 
 
 def ler(caminho):
@@ -61,6 +60,12 @@ def acessor(j, b, i):
     if a.get("normalized"):
         out /= MAXN[a["componentType"]]
     return out
+
+
+def bytes_da_view(j, b, i):
+    bv = j["bufferViews"][i]
+    ini = bv.get("byteOffset", 0)
+    return b[ini:ini + bv["byteLength"]]
 
 
 def trs(n):
@@ -111,13 +116,27 @@ class Escritor:
             if normalizado else self.acc(bufferView=v, componentType=tipo_gl, count=n, type=comp, **extra)
 
 
+def pesos_8bits(w):
+    """Pesos dos ossos em 8 bits, somando exatamente 255 em cada vértice."""
+    w = np.clip(w, 0, None)
+    w = w / np.maximum(w.sum(1, keepdims=True), 1e-12)
+    q = np.floor(w * 255)
+    falta = (255 - q.sum(1)).astype(int)
+    resto = w * 255 - q
+    ordem = np.argsort(-resto, axis=1)
+    for k in range(w.shape[1]):
+        q[np.arange(len(q)), ordem[:, k]] += (falta > k)
+    return q
+
+
 def compactar(entrada, saida=None):
     j, b = ler(entrada)
     if "KHR_mesh_quantization" in j.get("extensionsUsed", []):
         return entrada
     E = Escritor()
-    mats = j.get("materials", [])
-    novas_meshes, deq = [], {}
+    nos = j.get("nodes", [])
+    pele_da_malha = {n["mesh"]: n["skin"] for n in nos if "mesh" in n and "skin" in n}
+    lidas = {}
     for mi, mesh in enumerate(j.get("meshes", [])):
         prims = []
         for p in mesh["primitives"]:
@@ -125,28 +144,54 @@ def compactar(entrada, saida=None):
             alvos = [acessor(j, b, t["POSITION"]) if "POSITION" in t else np.zeros_like(pos)
                      for t in p.get("targets", [])]
             prims.append((p, pos, alvos))
-        # uma caixa por malha (todas as partes e todas as expressões cabem nela)
-        pts = np.vstack([pos + d for _, pos, alvos in prims for d in [np.zeros_like(pos)] + alvos])
+        lidas[mi] = prims
+    # uma caixa por malha (todas as partes e todas as expressões cabem nela); as malhas com ossos dividem a
+    # mesma caixa (a do esqueleto), porque o "desfazer" da quantização vai nas matrizes dos ossos
+    def caixa(meshes):
+        pts = np.vstack([pos + d for mi in meshes for _, pos, alvos in lidas[mi]
+                         for d in [np.zeros_like(pos)] + alvos])
         lo, hi = pts.min(0), pts.max(0)
-        c, h = (lo + hi) / 2, np.maximum((hi - lo) / 2, 1e-6) * 1.0001
-        deq[mi] = (c, h)
+        return (lo + hi) / 2, np.maximum((hi - lo) / 2, 1e-6) * 1.0001
+    deq = {}
+    for sk in set(pele_da_malha.values()):
+        c_h = caixa([mi for mi, s in pele_da_malha.items() if s == sk])
+        for mi, s in pele_da_malha.items():
+            if s == sk:
+                deq[mi] = c_h
+    for mi in lidas:
+        if mi not in deq:
+            deq[mi] = caixa([mi])
+    novas_meshes = []
+    for mi, mesh in enumerate(j.get("meshes", [])):
+        c, h = deq[mi]
         novos = []
-        for p, pos, alvos in prims:
+        for p, pos, alvos in lidas[mi]:
             q = np.clip(np.round((pos - c) / h * 32767), -32767, 32767)
             at = {"POSITION": E.atributo(q, np.int16, "VEC3", True, 5122)}
             E.accs[at["POSITION"]]["min"] = q.min(0).tolist()
             E.accs[at["POSITION"]]["max"] = q.max(0).tolist()
-            nome_mat = mats[p["material"]]["name"].lower() if "material" in p else ""
-            plano = any(nome_mat == k or nome_mat.startswith(k + "_") for k in PLANOS)
-            if "NORMAL" in p["attributes"] and not plano:
-                nrm = acessor(j, b, p["attributes"]["NORMAL"])
+            pa = p["attributes"]
+            mat = j.get("materials", [])[p["material"]] if "material" in p else {}
+            sem_luz = "KHR_materials_unlit" in mat.get("extensions", {})
+            if "NORMAL" in pa and not sem_luz:                  # sem luz, o app não usa normais
+                nrm = acessor(j, b, pa["NORMAL"])
                 nrm = nrm / np.maximum(np.linalg.norm(nrm, axis=1, keepdims=True), 1e-9)
                 at["NORMAL"] = E.atributo(np.round(nrm * 127), np.int8, "VEC3", True, 5120)
-            if "COLOR_0" in p["attributes"]:
-                cor = acessor(j, b, p["attributes"]["COLOR_0"])
+            if "TEXCOORD_0" in pa:
+                uv = np.clip(acessor(j, b, pa["TEXCOORD_0"]), 0, 1)
+                at["TEXCOORD_0"] = E.atributo(np.round(uv * 65535), np.uint16, "VEC2", True, 5123)
+            if "COLOR_0" in pa:
+                cor = acessor(j, b, pa["COLOR_0"])
                 if cor.shape[1] == 3:
                     cor = np.hstack([cor, np.ones((len(cor), 1))])
                 at["COLOR_0"] = E.atributo(np.round(np.clip(cor, 0, 1) * 255), np.uint8, "VEC4", True, 5121)
+            if "JOINTS_0" in pa and "WEIGHTS_0" in pa:
+                jt = acessor(j, b, pa["JOINTS_0"])
+                w = acessor(j, b, pa["WEIGHTS_0"])
+                w[w < 0.5 / 255] = 0
+                jt[w == 0] = 0
+                at["JOINTS_0"] = E.atributo(jt, np.uint8, "VEC4", False, 5121)
+                at["WEIGHTS_0"] = E.atributo(pesos_8bits(w), np.uint8, "VEC4", True, 5121)
             novo = {"attributes": at, "mode": p.get("mode", 4)}
             if "material" in p:
                 novo["material"] = p["material"]
@@ -174,21 +219,39 @@ def compactar(entrada, saida=None):
             if ts:
                 novo["targets"] = ts
             novos.append(novo)
-        m = {k: v for k, v in mesh.items() if k != "primitives"}
+        m = {k: v for k, v in mesh.items() if k not in ("primitives", "weights")}
         m["primitives"] = novos
         novas_meshes.append(m)
-    # o nó de cada malha desfaz a quantização (matriz = a dele × escala e centro da caixa)
-    for n in j.get("nodes", []):
-        if "mesh" not in n:
-            continue
-        c, h = deq[n["mesh"]]
+    # desfazer a quantização: nas malhas soltas, a matriz do nó; nas com ossos, as matrizes dos ossos
+    def matriz_deq(mi):
+        c, h = deq[mi]
         D = np.eye(4)
         D[:3, :3] = np.diag(h)
         D[:3, 3] = c
-        M = trs(n) @ D
+        return D
+    for n in nos:
+        if "mesh" not in n or "skin" in n:
+            continue
+        M = trs(n) @ matriz_deq(n["mesh"])
         for k in ("translation", "rotation", "scale"):
             n.pop(k, None)
         n["matrix"] = M.T.ravel().tolist()
+    for si, sk in enumerate(j.get("skins", [])):
+        mi = next(m for m, s in pele_da_malha.items() if s == si)
+        D = matriz_deq(mi)
+        n = len(sk["joints"])
+        ibm = acessor(j, b, sk["inverseBindMatrices"]).reshape(n, 4, 4).transpose(0, 2, 1) \
+            if "inverseBindMatrices" in sk else np.tile(np.eye(4), (n, 1, 1))
+        novo = np.array([m @ D for m in ibm]).transpose(0, 2, 1).reshape(n, 16).astype(np.float32)
+        sk["inverseBindMatrices"] = E.acc(bufferView=E.view(novo.tobytes()), componentType=5126, count=n,
+                                          type="MAT4")
+    for im in j.get("images", []):
+        if "bufferView" in im:
+            im["bufferView"] = E.view(bytes_da_view(j, b, im["bufferView"]))
+    for m in j.get("materials", []):
+        nome = m.get("name", "").lower()
+        if any(nome == k or nome.startswith(k + "_") for k in TRANSPARENTES):
+            m["alphaMode"] = "BLEND"
     j["meshes"] = novas_meshes
     j["accessors"], j["bufferViews"] = E.accs, E.views
     j["buffers"] = [{"byteLength": len(E.bin)}]

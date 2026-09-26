@@ -1,17 +1,17 @@
-// Ametista: o rosto dela é uma malha 3D (modelo/ametista.blend → ametista.glb), feita para editar e animar no
-// Blender, e desenhada aqui com um motor WebGL próprio e leve, no estilo anime: luz e sombra chapadas, contorno,
-// íris e boca "desenhadas" por cima do rosto (com máscara, como nos desenhos), brilho de cabelo e cristais
-// iridescentes. As expressões são as shape keys do modelo: piscar, olhar, falar (a, e, i, o, u), sorrir...
+// Ametista: o rosto dela é uma malha 3D (modelo/ametista.blend → ametista.glb), feita no Blender em cima da
+// pintura dela (a ficha de personagem): cada vértice fica no lugar do desenho e usa a cor dele. Parada, é a
+// própria pintura; mexendo, é uma malha com relevo, ossos e shape keys: pisca (os cílios giram com a pálpebra),
+// olha, fala (a, e, i, o, u), sorri, franze, cora, e a cabeça acena, nega, inclina e respira com profundidade.
 //
 // Estados (Rosto.modo):  dormindo | ocioso | ouvindo | pensando | falando |
 //                        executando | alerta | offline | aguardando | privado
 // Emoções (Rosto.emocao): neutra | feliz | pensativa | surpresa | triste | brava
 // Gestos (Rosto.gesto):  acenar (sim com a cabeça) | negar | inclinar
 //
-// Leve de propósito: ~19 mil triângulos, sem texturas; só as partes que mexem (olhos, boca, sobrancelhas) são
-// recalculadas, e só quando mudam. 24 quadros/s falando, 30 só no instante de uma piscada ou gesto, 8 parada,
-// nada quando a janela ou o app estão escondidos. Sem WebGL (ou sem o modelo), usa o rosto de reserva
-// (rosto2d.js, a ilustração animada).
+// Leve de propósito: uma textura, poucas chamadas de desenho, ossos na placa de vídeo; só as partes que mexem
+// (olhos, boca, sobrancelhas) são recalculadas, e só quando mudam. 24 quadros/s falando, 30 só no instante de
+// uma piscada ou gesto, 8 parada, nada quando a janela ou o app estão escondidos. Sem WebGL (ou sem o modelo),
+// usa o rosto de reserva (rosto2d.js, a ilustração animada em 2D).
 (() => {
   const canvas = document.getElementById("rosto");
   const ctx = canvas.getContext("2d");
@@ -23,20 +23,20 @@
   // ================================================================= estado (o mesmo contrato do rosto 2D)
   const EMOCOES = {        // luz por cima: cor, força, brilho, saturação
     neutra:    { cor: [255, 255, 255], forca: 0.00, luz: 1.00, sat: 1.00 },
-    feliz:     { cor: [255, 190, 230], forca: 0.12, luz: 1.03, sat: 1.00 },
-    pensativa: { cor: [190, 200, 255], forca: 0.10, luz: 0.99, sat: 0.96 },
-    surpresa:  { cor: [255, 255, 255], forca: 0.10, luz: 1.05, sat: 1.00 },
-    triste:    { cor: [150, 170, 230], forca: 0.18, luz: 0.92, sat: 0.8 },
-    brava:     { cor: [255, 120, 130], forca: 0.14, luz: 0.98, sat: 1.00 },
+    feliz:     { cor: [255, 190, 230], forca: 0.10, luz: 1.03, sat: 1.00 },
+    pensativa: { cor: [190, 200, 255], forca: 0.08, luz: 0.99, sat: 0.96 },
+    surpresa:  { cor: [255, 255, 255], forca: 0.08, luz: 1.04, sat: 1.00 },
+    triste:    { cor: [150, 170, 230], forca: 0.16, luz: 0.93, sat: 0.82 },
+    brava:     { cor: [255, 120, 130], forca: 0.12, luz: 0.98, sat: 1.00 },
   };
   // expressões (pesos das shape keys) de cada emoção
   const EXPRESSOES = {
-    neutra:    { sorriso: 0.18 },
-    feliz:     { sorriso: 0.85, olhos_felizes: 0.22, sobrancelhas_cima: 0.2, blush: 1 },
-    pensativa: { sobrancelha_pensativa: 0.85, boca_u: 0.12, triste: 0.1 },
-    surpresa:  { arregalar: 0.9, sobrancelhas_cima: 1, boca_o: 0.45 },
-    triste:    { sobrancelhas_tristes: 0.9, triste: 0.8, piscar: 0.22 },
-    brava:     { sobrancelhas_bravas: 1, bravo: 0.75, piscar: 0.12 },
+    neutra:    {},
+    feliz:     { sorriso: 0.85, olhos_felizes: 0.3, sobrancelhas_cima: 0.25, blush: 1 },
+    pensativa: { sobrancelha_pensativa: 0.9, boca_u: 0.15, triste: 0.15 },
+    surpresa:  { arregalar: 0.9, sobrancelhas_cima: 1, boca_o: 0.4 },
+    triste:    { sobrancelhas_tristes: 0.9, triste: 0.8, piscar: 0.25 },
+    brava:     { sobrancelhas_bravas: 1, bravo: 0.8, piscar: 0.12 },
   };
   const HALO = { normal: [203, 178, 248], alerta: [255, 176, 120], ouvindo: [179, 206, 251], feliz: [252, 201, 242] };
   const estado = {
@@ -47,18 +47,19 @@
     piscar: 0, proxPiscada: 2, piscadaDupla: false,
     efeito: { ...EMOCOES.neutra, cor: [...EMOCOES.neutra.cor] },
     brilho: [...HALO.normal], cinza: 0,
-    cabeca: { rot: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, roll: 0 },
+    cabeca: { yaw: 0, pitch: 0, roll: 0 },
     gesto: null, gestoT: 0,
     olhar: { x: 0, y: 0, alvoX: 0, alvoY: 0, prox: 1.5 },
     vogal: "boca_a", proxVogal: 0,
+    reflexo: -1, proxReflexo: 5,               // o brilho iridescente que atravessa a pintura de vez em quando
     pesos: {},                                 // shape keys suavizadas
-    forcado: null,                             // testes: {piscar, boca, sorriso, olhar: [x, y]}
+    forcado: null,                             // testes: {piscar, boca, sorriso, olhar: [x, y], pesos, cabeca}
     malha: null,                               // informações do modelo carregado
   };
 
   // ================================================================= WebGL
   const tela3d = document.createElement("canvas");
-  const opcoesGL = { alpha: true, antialias: true, stencil: true, premultipliedAlpha: true, depth: true };
+  const opcoesGL = { alpha: true, antialias: true, stencil: false, premultipliedAlpha: true, depth: true };
   let gl = null;
   try { gl = tela3d.getContext("webgl2", opcoesGL) || tela3d.getContext("webgl", opcoesGL); } catch { gl = null; }
   let reserva = false;
@@ -76,79 +77,43 @@
     document.head.appendChild(s);
   }
 
-  const VERT_TOON = `
-    attribute vec3 aP; attribute vec3 aN; attribute vec4 aC;
-    uniform mat4 uMV; uniform mat4 uP; uniform mat3 uNM; uniform float uLarg; uniform float uBal; uniform float uT;
-    varying vec3 vN; varying vec3 vV; varying vec4 vC; varying vec3 vL;
+  // os ossos (até 8) movem os vértices na placa de vídeo; a cor vem da pintura (textura com alfa pré-multiplicado)
+  const VERT = `
+    attribute vec3 aP; attribute vec2 aUV; attribute vec4 aJ; attribute vec4 aW;
+    uniform mat4 uOssos[8]; uniform mat4 uP;
+    varying vec2 vUV; varying vec2 vTela;
     void main() {
-      vec3 p = aP;
-      // o cabelo balança (mais nas pontas, que ficam mais para baixo)
-      float w = clamp((0.55 - p.y) / 1.8, 0.0, 1.0); w = w * w * uBal;
-      p.x += (sin(uT * 1.3 + p.y * 2.1) * 0.012 + sin(uT * 0.7 + p.z * 3.0) * 0.008) * w;
-      p.z += sin(uT * 1.1 + p.x * 2.5) * 0.008 * w;
-      vec4 mv = uMV * vec4(p, 1.0);
-      vec3 n = normalize(uNM * aN);
-      mv.xyz += n * uLarg * (-mv.z);            // contorno: casca empurrada para fora (largura constante na tela)
-      vN = n; vV = normalize(-mv.xyz); vC = aC; vL = p;
-      gl_Position = uP * mv;
+      mat4 m = uOssos[int(aJ.x)] * aW.x + uOssos[int(aJ.y)] * aW.y + uOssos[int(aJ.z)] * aW.z + uOssos[int(aJ.w)] * aW.w;
+      vec4 p = uP * (m * vec4(aP, 1.0));
+      vUV = aUV; vTela = p.xy;
+      gl_Position = p;
     }`;
-  const FRAG_TOON = `
+  const FRAG_PINTURA = `
     precision mediump float;
-    varying vec3 vN; varying vec3 vV; varying vec4 vC; varying vec3 vL;
-    uniform vec3 uCor; uniform vec3 uSombra; uniform vec3 uLuz; uniform float uIrid; uniform float uBrilho;
-    uniform float uMetal; uniform float uModo; uniform float uAlfa;
+    varying vec2 vUV; varying vec2 vTela;
+    uniform sampler2D uTex; uniform float uReflexo; uniform float uOpaco; uniform float uNitidez;
     vec3 irid(float x) {              // rosa → lilás → azul-cristal → rosa
       float f = fract(x) * 3.0;
       vec3 a = vec3(1.0, 0.78, 0.93), b = vec3(0.8, 0.7, 0.97), c = vec3(0.7, 0.88, 1.0);
       return f < 1.0 ? mix(a, b, f) : f < 2.0 ? mix(b, c, f - 1.0) : mix(c, a, f - 2.0);
     }
     void main() {
-      if (uModo > 1.5) { gl_FragColor = vec4(uCor, 1.0); return; }            // contorno
-      vec3 N = normalize(vN); vec3 V = normalize(vV);
-      if (!gl_FrontFacing) N = -N;
-      float nl = dot(N, uLuz);
-      float luz = smoothstep(0.0, 0.07, nl);
-      vec3 c = mix(uSombra, uCor, luz) * vC.rgb;
-      float fres = pow(1.0 - max(dot(N, V), 0.0), 2.5);
-      c += uIrid * fres * irid(fres * 1.3 + vL.y * 0.4 + vL.x * 0.3) * 0.4;
-      if (uBrilho > 0.0) {                                                    // brilho de cabelo (anel de anime)
-        float faixa = N.y - 0.42 - 0.04 * sin(vL.x * 38.0) - 0.02 * sin(vL.z * 57.0);
-        float anel = smoothstep(0.075, 0.035, abs(faixa)) * luz;
-        c = mix(c, mix(vec3(1.0), irid(vL.x * 0.8 + 0.2), 0.35), anel * 0.7 * uBrilho);
-      }
-      if (uMetal > 0.0) {
-        vec3 r = reflect(-uLuz, N);
-        float esp = smoothstep(0.86, 0.9, dot(r, V));
-        c = mix(c, vec3(1.0, 0.98, 0.95), esp * uMetal);
-        c = mix(c, c * irid(dot(N, V) * 1.5 + 0.1) * 1.25, 0.18 * uMetal);
-      }
-      gl_FragColor = vec4(c, uAlfa);
+      vec4 c = texture2D(uTex, vUV, uNitidez);
+      if (uOpaco > 0.5) c.a = 1.0;
+      float d = vTela.x * 0.55 + vTela.y * 0.84 - uReflexo;
+      float faixa = exp(-d * d * 14.0);
+      float lum = dot(c.rgb, vec3(0.3, 0.59, 0.11));
+      c.rgb += irid(vTela.x * 0.7 - vTela.y * 0.4 + uReflexo * 0.5) * faixa * (0.05 + 0.22 * lum * lum) * c.a;
+      gl_FragColor = c;
     }`;
-  const VERT_PLANO = `
-    attribute vec3 aP; attribute vec4 aC;
-    uniform mat4 uMV; uniform mat4 uP;
-    varying vec4 vC;
-    void main() { vC = aC; gl_Position = uP * (uMV * vec4(aP, 1.0)); }`;
-  const FRAG_PLANO = `
+  const FRAG_BLUSH = `
     precision mediump float;
-    varying vec4 vC; uniform vec3 uCor; uniform float uAlfa;
-    void main() { gl_FragColor = vec4(uCor * vC.rgb * uAlfa * vC.a, uAlfa * vC.a); }`;
-  const FRAG_VIDRO = `
-    precision mediump float;
-    varying vec3 vN; varying vec3 vV; varying vec4 vC; varying vec3 vL;
-    uniform vec3 uCor; uniform float uAlfa; uniform vec3 uLuz;
-    vec3 irid(float x) {
-      float f = fract(x) * 3.0;
-      vec3 a = vec3(1.0, 0.78, 0.93), b = vec3(0.8, 0.7, 0.97), c = vec3(0.7, 0.88, 1.0);
-      return f < 1.0 ? mix(a, b, f) : f < 2.0 ? mix(b, c, f - 1.0) : mix(c, a, f - 2.0);
-    }
+    varying vec2 vUV;
+    uniform vec3 uCor; uniform float uAlfa;
     void main() {
-      vec3 N = normalize(vN); vec3 V = normalize(vV);
-      float fres = pow(1.0 - abs(dot(N, V)), 2.0);
-      vec3 c = mix(uCor, irid(fres + vL.x * 1.5 + vL.y), 0.35);
-      float riscos = smoothstep(0.035, 0.0, abs(vL.x * 0.7 + vL.y - 0.02 - 0.25)) * 0.5;
-      float a = uAlfa + fres * 0.35 + riscos * 0.4;
-      gl_FragColor = vec4(c * a + riscos * 0.5, a);
+      float r = length((vUV - 0.5) * 2.0);
+      float a = uAlfa * pow(1.0 - smoothstep(0.0, 1.0, r), 1.6);
+      gl_FragColor = vec4(uCor * a, a);
     }`;
 
   function compilar(vs, fs) {
@@ -160,12 +125,15 @@
     };
     const p = gl.createProgram();
     gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
-    gl.bindAttribLocation(p, 0, "aP"); gl.bindAttribLocation(p, 1, "aN"); gl.bindAttribLocation(p, 2, "aC");
+    ["aP", "aUV", "aJ", "aW"].forEach((n, i) => gl.bindAttribLocation(p, i, n));
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p) || "programa");
     const u = {};
     const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
-    for (let i = 0; i < n; i++) { const a = gl.getActiveUniform(p, i); u[a.name] = gl.getUniformLocation(p, a.name); }
+    for (let i = 0; i < n; i++) {
+      const a = gl.getActiveUniform(p, i);
+      u[a.name.replace(/\[0\]$/, "")] = gl.getUniformLocation(p, a.name);
+    }
     return { p, u };
   }
 
@@ -191,15 +159,22 @@
   function acessor(g, i, comoFloat = true) {
     const a = g.json.accessors[i];
     const nc = COMPS[a.type], T = TIPOS[a.componentType], total = a.count * nc;
-    let out = comoFloat ? new Float32Array(total) : new T(total);
+    const out = comoFloat ? new Float32Array(total) : new T(total);
     const escala = comoFloat && a.normalized ? 1 / MAXNORM[a.componentType] : 1;
     if (a.bufferView !== undefined) {
       const bv = g.json.bufferViews[a.bufferView];
-      const passo = bv.byteStride || nc * T.BYTES_PER_ELEMENT;
-      const dv = new DataView(g.bin, (bv.byteOffset || 0) + (a.byteOffset || 0));
-      const ler = { 5120: "getInt8", 5121: "getUint8", 5122: "getInt16", 5123: "getUint16", 5125: "getUint32", 5126: "getFloat32" }[a.componentType];
-      for (let k = 0; k < a.count; k++)
-        for (let c = 0; c < nc; c++) out[k * nc + c] = dv[ler](k * passo + c * T.BYTES_PER_ELEMENT, true) * escala;
+      const tam = nc * T.BYTES_PER_ELEMENT;
+      const passo = bv.byteStride || tam;
+      const ini = (bv.byteOffset || 0) + (a.byteOffset || 0);
+      if (passo === tam && ini % T.BYTES_PER_ELEMENT === 0) {          // o caso comum: copia direto
+        const src = new T(g.bin, ini, total);
+        if (escala === 1) out.set(src); else for (let k = 0; k < total; k++) out[k] = src[k] * escala;
+      } else {
+        const dv = new DataView(g.bin, ini);
+        const ler = { 5120: "getInt8", 5121: "getUint8", 5122: "getInt16", 5123: "getUint16", 5125: "getUint32", 5126: "getFloat32" }[a.componentType];
+        for (let k = 0; k < a.count; k++)
+          for (let c = 0; c < nc; c++) out[k * nc + c] = dv[ler](k * passo + c * T.BYTES_PER_ELEMENT, true) * escala;
+      }
     }
     if (a.sparse) {
       const s = a.sparse;
@@ -234,100 +209,127 @@
         2 * (x * z + y * w) * s[2], 2 * (y * z - x * w) * s[2], (1 - 2 * (x * x + y * y)) * s[2], 0,
         t[0], t[1], t[2], 1]);
     },
+    rz(a) { const c = Math.cos(a), s = Math.sin(a); return new Float32Array([c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]); },
     rot(yaw, pitch, roll) {           // Y (virar), X (acenar), Z (inclinar)
-      const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), cr = Math.cos(roll), sr = Math.sin(roll);
+      const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
       const ry = new Float32Array([cy, 0, -sy, 0, 0, 1, 0, 0, sy, 0, cy, 0, 0, 0, 0, 1]);
       const rx = new Float32Array([1, 0, 0, 0, 0, cp, sp, 0, 0, -sp, cp, 0, 0, 0, 0, 1]);
-      const rz = new Float32Array([cr, sr, 0, 0, -sr, cr, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-      return M.mul(ry, M.mul(rx, rz));
+      return M.mul(ry, M.mul(rx, M.rz(roll)));
     },
     persp(fov, asp, perto, longe) {
       const f = 1 / Math.tan(fov / 2), nf = 1 / (perto - longe);
       return new Float32Array([f / asp, 0, 0, 0, 0, f, 0, 0, 0, 0, (longe + perto) * nf, -1, 0, 0, 2 * longe * perto * nf, 0]);
     },
-    normal(m) {                        // inversa transposta da 3x3 (para as normais)
-      const a = m[0], b = m[1], c = m[2], d = m[4], e = m[5], f = m[6], g = m[8], h = m[9], i = m[10];
-      const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g;
-      const det = a * A + b * B + c * C || 1;
-      return new Float32Array([A / det, B / det, C / det, -(b * i - c * h) / det, (a * i - c * g) / det,
-        -(a * h - b * g) / det, (b * f - c * e) / det, -(a * f - c * d) / det, (a * e - b * d) / det]);
+    ortho(l, r, b, t, perto, longe) {
+      return new Float32Array([2 / (r - l), 0, 0, 0, 0, 2 / (t - b), 0, 0, 0, 0, -2 / (longe - perto), 0,
+        -(r + l) / (r - l), -(t + b) / (t - b), -(longe + perto) / (longe - perto), 1]);
+    },
+    aplicar(m, p) {
+      return [m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13],
+        m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]];
     },
   };
 
-  // Como pintar cada material: pelo nome (o contrato com o Blender); os extras do material podem mudar as cores
-  const PLANOS = {       // [ordem, máscara: 1 grava 2 respeita, número da máscara]
-    pele_sombra: [0], nariz: [1], blush: [1], sombra_olho: [1], labio: [2], vinco: [2],
-    olho_branco: [3, 1, 1], iris: [4, 2, 1], iris_estrela: [5, 2, 1], pupila: [6, 2, 1], brilho_olho: [7, 2, 1],
-    cilios_baixo: [8], cilios: [9], sobrancelha: [10, 0, 0, 1],   // a sobrancelha aparece por cima da franja
-    boca_dentro: [3, 1, 2], dentes: [4, 2, 2], lingua: [5, 2, 2], linha_boca: [6],
-  };
-  const TOONS = {        // brilho de cabelo, metal, iridescência, contorno (px)
-    pele: { contorno: 1 }, cabelo: { brilho: 1, irid: 0.6, contorno: 1 }, roupa: { contorno: 1.1 },
-    roupa_detalhe: { contorno: 0.8, irid: 0.3 }, metal: { metal: 1, irid: 0.8, contorno: 0.6 },
-    cristal: { irid: 1, metal: 0.6, contorno: 0.6 },
-  };
-  const hexa = (h) => { const n = parseInt(String(h).replace("#", ""), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; };
-  const paraSRGB = (v) => v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
-  const escurecer = (c, k) => c.map((v) => v * k);
-
+  // Como desenhar cada material: pelo nome (o contrato com o Blender)
+  //   corpo, olho, boca_dentro: opacos, com a cor da textura     rosto: a máscara do rosto (a borda some aos poucos)
+  //   iris, cilios: com transparência      blush: o rubor (aparece com o peso "blush")
+  //   brilho: estrelinhas que cintilam nos cristais
   function tipoMaterial(nome) {
     const base = String(nome || "").toLowerCase().replace(/\.\d+$/, "");
-    if (base.startsWith("vidro")) return { modo: "vidro" };
-    for (const k of Object.keys(PLANOS)) if (base === k || base.startsWith(k + "_")) return { modo: "plano", chave: k };
-    for (const k of Object.keys(TOONS).sort((a, b) => b.length - a.length))
-      if (base === k || base.startsWith(k + "_") || base.startsWith(k)) return { modo: "toon", chave: k };
-    return { modo: "toon", chave: "pele" };
+    const e = (k) => base === k || base.startsWith(k + "_");
+    if (e("brilho")) return "brilho";
+    if (e("blush")) return "blush";
+    if (e("iris") || e("cilios")) return "camada";
+    if (e("rosto")) return "mascara";
+    return "opaco";
   }
+  const ORDEM = { opaco: 0, mascara: 1, camada: 2, blush: 3 };
 
   // ================================================================= o modelo na GPU
   let progs = null, modelo = null;
+
+  const fonteDe = (tex) => tex.source !== undefined ? tex.source : tex.extensions && Object.values(tex.extensions)[0].source;
+
+  async function carregarImagem(g, indice) {
+    const im = g.json.images[indice];
+    const bv = g.json.bufferViews[im.bufferView];
+    const blob = new Blob([new Uint8Array(g.bin, bv.byteOffset || 0, bv.byteLength)], { type: im.mimeType || "image/png" });
+    if (window.createImageBitmap)
+      return createImageBitmap(blob, { premultiplyAlpha: "premultiply", colorSpaceConversion: "none" });
+    return new Promise((ok, erro) => {
+      const i = new Image(); i.onload = () => ok(i); i.onerror = () => erro(new Error("textura ilegível"));
+      i.src = URL.createObjectURL(blob);
+    });
+  }
+
+  // as imagens do modelo (cada uma lida uma vez só, com mipmaps e alfa pré-multiplicado); devolve, para cada
+  // textura do glTF (o Blender repete a mesma imagem em várias), a textura da placa correspondente
+  async function texturas(g) {
+    const lista = g.json.textures || [];
+    if (!lista.length) throw new Error("o modelo não tem textura");
+    const usadas = [...new Set(lista.map(fonteDe))];
+    const imagens = await Promise.all(usadas.map((i) => carregarImagem(g, i)));
+    const naPlaca = {};
+    usadas.forEach((indice, k) => {
+      const img = imagens[k];
+      const t = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+      gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      const ext = gl.getExtension("EXT_texture_filter_anisotropic");
+      if (ext && ext.TEXTURE_MAX_ANISOTROPY_EXT) gl.texParameterf(gl.TEXTURE_2D, ext.TEXTURE_MAX_ANISOTROPY_EXT, 4);
+      if (img.close) img.close();
+      naPlaca[indice] = t;
+    });
+    return lista.map((tex) => naPlaca[fonteDe(tex)]);
+  }
 
   function montar(g) {
     const mats = (g.json.materials || []).map((m) => {
       const pbr = m.pbrMetallicRoughness || {};
       const bc = pbr.baseColorFactor || [1, 1, 1, 1];
-      const ex = m.extras || {};
-      const t = tipoMaterial(m.name);
-      const cor = bc.slice(0, 3).map(paraSRGB);
-      const toon = TOONS[t.chave] || {};
-      return {
-        nome: m.name, ...t, cor, alfa: m.alphaMode === "BLEND" ? bc[3] : 1,
-        sombra: ex.sombra ? hexa(ex.sombra) : escurecer(cor, 0.78),
-        contorno: ex.contorno ? hexa(ex.contorno) : escurecer(cor, 0.45),
-        irid: ex.iridescente !== undefined ? +ex.iridescente : (toon.irid || 0),
-        brilho: ex.brilho ? 1 : (toon.brilho || 0), metal: toon.metal || 0,
-        larguraContorno: ex.largura_contorno !== undefined ? +ex.largura_contorno : (toon.contorno || 0),
-        plano: PLANOS[t.chave] || [0],
-      };
+      const tex = pbr.baseColorTexture ? pbr.baseColorTexture.index : 0;
+      return { nome: m.name, tipo: tipoMaterial(m.name), cor: bc.slice(0, 3), tex };
     });
     const pecas = [];
     const nomesAlvos = new Set();
+    const brilhos = [];
     const meshes = (g.json.meshes || []).map((mesh, mi) => {
       const nomes = (mesh.extras && mesh.extras.targetNames) || [];
       nomes.forEach((n) => nomesAlvos.add(n));
       return mesh.primitives.map((pr) => {
         if (pr.mode !== undefined && pr.mode !== 4) return null;          // só triângulos
-        const pos = acessor(g, pr.attributes.POSITION);
+        const at = pr.attributes;
+        const pos = acessor(g, at.POSITION);
         const nv = pos.length / 3;
-        const plano = (mats[pr.material] || {}).modo === "plano";       // desenhado por cima: não usa normais
-        const nor = pr.attributes.NORMAL !== undefined ? acessor(g, pr.attributes.NORMAL)
-          : plano ? new Float32Array(3) : normaisDe(pos, pr, g);
-        let cor = new Float32Array(nv * 4).fill(1);
-        if (pr.attributes.COLOR_0 !== undefined) {
-          const c = acessor(g, pr.attributes.COLOR_0);
-          const nc = c.length / nv;
-          for (let k = 0; k < nv; k++) {
-            for (let j = 0; j < 3; j++) cor[k * 4 + j] = paraSRGB(c[k * nc + j]);
-            cor[k * 4 + 3] = nc === 4 ? c[k * nc + 3] : 1;
-          }
-        }
+        const mat = mats[pr.material] || { tipo: "opaco", cor: [1, 1, 1] };
+        const uv = at.TEXCOORD_0 !== undefined ? acessor(g, at.TEXCOORD_0) : new Float32Array(nv * 2);
+        const jt = at.JOINTS_0 !== undefined ? acessor(g, at.JOINTS_0) : new Float32Array(nv * 4);
+        let w = at.WEIGHTS_0 !== undefined ? acessor(g, at.WEIGHTS_0) : null;
+        if (!w) { w = new Float32Array(nv * 4); for (let k = 0; k < nv; k++) w[k * 4] = 1; }
         const idx = pr.indices !== undefined ? acessor(g, pr.indices, false) : null;
+        if (mat.tipo === "brilho") {                                     // os brilhos: só o centro de cada um
+          const tri = idx || [...Array(nv).keys()];
+          for (let i = 0; i + 5 < tri.length; i += 6) {
+            const vs = [...new Set([tri[i], tri[i + 1], tri[i + 2], tri[i + 3], tri[i + 4], tri[i + 5]])];
+            const c = [0, 1, 2].map((e) => vs.reduce((s, v) => s + pos[v * 3 + e], 0) / vs.length);
+            brilhos.push({ mesh: mi, p: c, j: Array.from(jt.subarray(vs[0] * 4, vs[0] * 4 + 4)), w: Array.from(w.subarray(vs[0] * 4, vs[0] * 4 + 4)) });
+          }
+          return null;
+        }
         const alvos = (pr.targets || []).map((t) => t.POSITION !== undefined ? acessor(g, t.POSITION) : null);
         const p = {
-          mesh: mi, nomes, mat: mats[pr.material] || { modo: "toon", cor: [0.9, 0.9, 0.9], sombra: [0.7, 0.7, 0.7], contorno: [0.3, 0.3, 0.3], alfa: 1, irid: 0, brilho: 0, metal: 0, larguraContorno: 1, plano: [0] },
+          mesh: mi, nomes, mat,
           base: pos, atual: new Float32Array(pos), alvos, pesos: new Float32Array(alvos.length),
           n: idx ? idx.length : nv,
-          bufP: buffer(pos, gl.DYNAMIC_DRAW), bufN: buffer(nor), bufC: buffer(cor),
+          bufP: buffer(pos, alvos.length ? gl.DYNAMIC_DRAW : gl.STATIC_DRAW),
+          bufUV: buffer(uv), bufJ: buffer(jt), bufW: buffer(w),
           bufI: null, tipoI: gl.UNSIGNED_SHORT,
         };
         if (idx) {
@@ -343,16 +345,30 @@
         return p;
       }).filter(Boolean);
     });
-    // nós
+    // nós, ossos e a pele (skin)
     const nos = (g.json.nodes || []).map((n) => ({
-      nome: n.name || "", filhos: n.children || [], mesh: n.mesh,
+      nome: n.name || "", filhos: n.children || [], mesh: n.mesh, pele: n.skin, extras: n.extras || {},
       local: n.matrix ? new Float32Array(n.matrix) : M.trs(n.translation, n.rotation, n.scale),
+      t: n.translation || [0, 0, 0], r: n.rotation, s: n.scale,
     }));
-    const raizes = (g.json.scenes && g.json.scenes[g.json.scene || 0] || { nodes: nos.map((_, i) => i) }).nodes;
-    const cabeca = nos.findIndex((n) => /^cabe[cç]a$/i.test(n.nome));
+    const pai = new Array(nos.length).fill(-1);
+    nos.forEach((n, i) => n.filhos.forEach((f) => { pai[f] = i; }));
+    const peles = (g.json.skins || []).map((s) => {
+      const ibm = s.inverseBindMatrices !== undefined ? acessor(g, s.inverseBindMatrices) : null;
+      return { juntas: s.joints, ibm: s.joints.map((_, k) => ibm ? ibm.subarray(k * 16, k * 16 + 16) : M.id()) };
+    });
+    if (peles.some((s) => s.juntas.length > 8)) throw new Error("ossos demais (até 8)");
+    const raiz = nos.find((n) => n.extras && n.extras.quadro_tudo) || { extras: {} };
+    const ex = raiz.extras;
+    const info = {                                   // enquadramentos: [centro x, centro y, altura], em unidades
+      tudo: ex.quadro_tudo || [0, 0.655, 0.52], rosto: ex.quadro_rosto || [0, 0.705, 0.34],
+      inclinacao: ex.inclinacao_rosto || 0,
+    };
+    const ossos = {};
+    nos.forEach((n, i) => { if (/^(raiz|peito|pescoco|cabeca|cabelo_e|cabelo_d)$/.test(n.nome)) ossos[n.nome] = i; });
     const tri = pecas.reduce((s, p) => s + p.n / 3, 0);
-    // limites (para enquadrar)
-    return { mats, meshes, pecas, nos, raizes, cabeca, alvos: [...nomesAlvos], triangulos: Math.round(tri) };
+    return { mats, meshes, pecas, nos, pai, peles, info, ossos, brilhos, texturas: null,
+             alvos: [...nomesAlvos], triangulos: Math.round(tri) };
   }
 
   function buffer(dados, uso) {
@@ -360,23 +376,6 @@
     gl.bindBuffer(gl.ARRAY_BUFFER, b);
     gl.bufferData(gl.ARRAY_BUFFER, dados, uso || gl.STATIC_DRAW);
     return b;
-  }
-
-  function normaisDe(pos, pr, g) {                   // se o arquivo vier sem normais
-    const n = new Float32Array(pos.length);
-    const idx = pr.indices !== undefined ? acessor(g, pr.indices, false) : [...Array(pos.length / 3).keys()];
-    for (let i = 0; i < idx.length; i += 3) {
-      const [a, b, c] = [idx[i] * 3, idx[i + 1] * 3, idx[i + 2] * 3];
-      const u = [pos[b] - pos[a], pos[b + 1] - pos[a + 1], pos[b + 2] - pos[a + 2]];
-      const v = [pos[c] - pos[a], pos[c + 1] - pos[a + 1], pos[c + 2] - pos[a + 2]];
-      const cr = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-      for (const k of [a, b, c]) for (let j = 0; j < 3; j++) n[k + j] += cr[j];
-    }
-    for (let i = 0; i < n.length; i += 3) {
-      const l = Math.hypot(n[i], n[i + 1], n[i + 2]) || 1;
-      n[i] /= l; n[i + 1] /= l; n[i + 2] /= l;
-    }
-    return n;
   }
 
   // aplica os pesos das shape keys (só nas peças que têm, e só quando mudam)
@@ -400,126 +399,144 @@
     }
   }
 
+  // ================================================================= ossos: a cabeça, o pescoço, o peito, as mechas
+  function posarOssos(t) {
+    const cab = estado.cabeca, info = modelo.info;
+    if (estado.forcado && estado.forcado.quieto) t = 0;
+    // os gestos são em volta dos eixos do rosto dela (a cabeça está inclinada na pintura)
+    const incl = info.inclinacao;
+    const noRosto = (yaw, pitch, roll) => M.mul(M.rz(incl), M.mul(M.rot(yaw, pitch, roll), M.rz(-incl)));
+    const extra = {
+      pescoco: noRosto(cab.yaw * 0.35, cab.pitch * 0.35, cab.roll * 0.35),
+      cabeca: noRosto(cab.yaw * 0.65, cab.pitch * 0.65, cab.roll * 0.65),
+      cabelo_e: M.rz(0.012 * Math.sin(t * 1.1) + 0.006 * Math.sin(t * 2.3 + 1) - cab.roll * 0.2 + cab.yaw * 0.15),
+      cabelo_d: M.rz(0.01 * Math.sin(t * 1.3 + 2) + 0.005 * Math.sin(t * 2.1) - cab.roll * 0.2 - cab.yaw * 0.15),
+    };
+    const resp = Math.sin(t * 1.6) * 0.0035;
+    const mundos = new Array(modelo.nos.length);
+    const nomeDe = {};
+    for (const [n, i] of Object.entries(modelo.ossos)) nomeDe[i] = n;
+    const visitar = (i, paiM) => {
+      const n = modelo.nos[i];
+      let local = n.local;
+      const nome = nomeDe[i];
+      if (nome === "peito") local = M.mul(M.trs([n.t[0], n.t[1] + resp, n.t[2]]), M.trs([0, 0, 0], n.r, n.s));
+      if (nome && extra[nome]) local = M.mul(local, extra[nome]);
+      mundos[i] = M.mul(paiM, local);
+      n.filhos.forEach((f) => visitar(f, mundos[i]));
+    };
+    modelo.nos.forEach((n, i) => { if (modelo.pai[i] < 0) visitar(i, M.id()); });
+    return mundos;
+  }
+
+  function matrizesDaPele(mundos, no) {
+    const n = modelo.nos[no];
+    const out = new Float32Array(16 * 8);
+    if (n.pele === undefined) { out.set(mundos[no], 0); return out; }
+    const pele = modelo.peles[n.pele];
+    pele.juntas.forEach((j, k) => out.set(M.mul(mundos[j], pele.ibm[k]), k * 16));
+    return out;
+  }
+
   // ================================================================= desenho 3D
-  const FOV = 0.36;                                          // ~20°: pouca perspectiva, jeito de desenho
-  const ENQ = { y: -0.28, h: 3.5, w: 2.75 };                 // cabeça, pescoço e ombros (unidades do modelo)
-  const LUZ = (() => { const v = [-0.52, 0.56, 0.64]; const l = Math.hypot(...v); return v.map((x) => x / l); })();
+  let ultimaProj = null;
+  function enquadrar(largura, altura) {
+    // molduras altas mostram o busto; molduras mais quadradas (ou largas) fecham no rosto
+    const info = modelo.info, asp = largura / altura;
+    const f = Math.min(1, Math.max(0, (asp - 0.66) / (0.95 - 0.66)));
+    const [tx, ty, th] = info.tudo, [rx, ry, rh] = info.rosto;
+    let cx = tx + (rx - tx) * f, cy = ty + (ry - ty) * f, h = th + (rh - th) * f;
+    if (estado.forcado && estado.forcado.quadro) [cx, cy, h] = estado.forcado.quadro;     // prévias e testes
+    const fov = 0.32;                                // ~18°: pouca perspectiva, como uma lente de retrato
+    const dist = h / 2 / Math.tan(fov / 2);
+    const plano = 0.1;                               // o plano do rosto (a frente dela fica em z ~0,15)
+    const P = M.persp(fov, asp, dist * 0.6, dist * 1.6);
+    return M.mul(P, M.trs([-cx, -cy, -(plano + dist)]));
+  }
 
   function desenhar3d(largura, altura, t) {
     if (tela3d.width !== largura || tela3d.height !== altura) { tela3d.width = largura; tela3d.height = altura; }
     gl.viewport(0, 0, largura, altura);
-    gl.clearColor(0, 0, 0, 0); gl.clearDepth(1); gl.clearStencil(0);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
-    const asp = largura / altura;
-    // em telas pequenas (a barra, o celular) o enquadramento fecha no rosto; nas grandes mostra os ombros
-    const aberto = Math.min(1, Math.max(0, (altura / dpr - 120) / 280));
-    const enq = { y: -0.1 + (ENQ.y + 0.1) * aberto, h: 2.8 + (ENQ.h - 2.8) * aberto, w: 2.3 + (ENQ.w - 2.3) * aberto };
-    const alturaVista = Math.max(enq.h, enq.w / asp);
-    const dist = alturaVista / 2 / Math.tan(FOV / 2);
-    const P = M.persp(FOV, asp, dist - 4, dist + 4);
-    const view = M.trs([0, -enq.y, -dist]);
-    // mundo de cada nó (a cabeça gira em volta do pescoço)
-    const cab = estado.cabeca;
-    const resp = Math.sin(t * 1.6) * 0.012;
-    const mundos = new Array(modelo.nos.length);
-    const visitar = (i, pai) => {
-      const n = modelo.nos[i];
-      let local = n.local;
-      if (i === modelo.cabeca) local = M.mul(local, M.rot(cab.yaw, cab.pitch, cab.roll));
-      mundos[i] = M.mul(pai, local);
-      n.filhos.forEach((f) => visitar(f, mundos[i]));
-    };
-    const raiz = M.trs([0, resp, 0]);
-    modelo.raizes.forEach((i) => visitar(i, raiz));
-
-    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
-    gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
-    gl.disable(gl.BLEND); gl.disable(gl.STENCIL_TEST);
-    const pxMundo = 2 * Math.tan(FOV / 2) / altura;           // tamanho de um pixel a 1 unidade da câmera
+    gl.clearColor(0, 0, 0, 0); gl.clearDepth(1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    const P = enquadrar(largura, altura);
+    ultimaProj = P;
+    const mundos = posarOssos(t);
+    modelo.mundos = mundos;
     const lista = [];
+    const esconder = (estado.forcado && estado.forcado.esconder) || [];                 // prévias: peças escondidas
     modelo.nos.forEach((n, i) => {
-      if (n.mesh === undefined || !modelo.meshes[n.mesh]) return;
-      const mv = M.mul(view, mundos[i]);
-      modelo.meshes[n.mesh].forEach((p) => lista.push({ p, mv, nm: M.normal(mv), no: n }));
+      if (n.mesh === undefined || !modelo.meshes[n.mesh] || esconder.includes(n.nome)) return;
+      const ossos = matrizesDaPele(mundos, i);
+      modelo.meshes[n.mesh].forEach((p) => lista.push({ p, ossos }));
     });
-    const toon = lista.filter((d) => d.p.mat.modo === "toon");
-    const planos = lista.filter((d) => d.p.mat.modo === "plano").sort((a, b) => a.p.mat.plano[0] - b.p.mat.plano[0]);
-    const vidros = lista.filter((d) => d.p.mat.modo === "vidro");
-    // 1) sólidos com luz de anime
-    usar(progs.toon, P);
-    gl.uniform3fv(progs.toon.u.uLuz, LUZ);
-    gl.uniform1f(progs.toon.u.uT, t);
-    for (const d of toon) {
-      const m = d.p.mat;
-      gl.uniform1f(progs.toon.u.uModo, 0); gl.uniform1f(progs.toon.u.uLarg, 0);
-      gl.uniform3fv(progs.toon.u.uCor, m.cor); gl.uniform3fv(progs.toon.u.uSombra, m.sombra);
-      gl.uniform1f(progs.toon.u.uIrid, m.irid); gl.uniform1f(progs.toon.u.uBrilho, m.brilho);
-      gl.uniform1f(progs.toon.u.uMetal, m.metal); gl.uniform1f(progs.toon.u.uAlfa, 1);
-      gl.uniform1f(progs.toon.u.uBal, m.chave === "cabelo" ? 1 : 0);
-      desenharPeca(progs.toon, d, true);
-    }
-    // 2) contornos: a casca de trás, empurrada para fora
-    gl.cullFace(gl.FRONT);
-    gl.uniform1f(progs.toon.u.uModo, 2);
-    for (const d of toon) {
-      const m = d.p.mat;
-      if (!m.larguraContorno) continue;
-      gl.uniform1f(progs.toon.u.uLarg, pxMundo * m.larguraContorno * Math.max(1, altura / 260));
-      gl.uniform3fv(progs.toon.u.uCor, m.contorno);
-      gl.uniform1f(progs.toon.u.uBal, m.chave === "cabelo" ? 1 : 0);
-      desenharPeca(progs.toon, d, true);
-    }
-    gl.cullFace(gl.BACK);
-    // 3) o que é desenhado por cima do rosto: olhos, boca, sobrancelhas, blush... (com máscara)
+    lista.sort((a, b) => ORDEM[a.p.mat.tipo] - ORDEM[b.p.mat.tipo]);
+    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
     gl.disable(gl.CULL_FACE);
-    gl.depthMask(false);
-    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    gl.enable(gl.STENCIL_TEST);
-    usar(progs.plano, P);
-    for (const d of planos) {
+    gl.activeTexture(gl.TEXTURE0);
+    // a nitidez: um pouco menos de desfoque ao diminuir as texturas (são pintadas, aguentam bem)
+    const nitidez = -0.3;
+    const reflexo = estado.reflexo < 0 || (estado.forcado && estado.forcado.quieto) ? 9 : -2.2 + estado.reflexo * 4.4;
+    for (const d of lista) {
       const m = d.p.mat;
-      const [, masc, num] = m.plano;
-      if (masc === 1) { gl.stencilFunc(gl.ALWAYS, num, 0xff); gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE); }
-      else if (masc === 2) { gl.stencilFunc(gl.EQUAL, num, 0xff); gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP); }
-      else { gl.stencilFunc(gl.ALWAYS, 0, 0xff); gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP); }
-      let alfa = m.alfa;
-      if (m.chave === "blush") alfa *= estado.pesos.blush || 0;
-      if (m.plano[3]) gl.disable(gl.DEPTH_TEST); else gl.enable(gl.DEPTH_TEST);
-      if (alfa < 0.01) continue;
-      gl.uniform3fv(progs.plano.u.uCor, m.cor); gl.uniform1f(progs.plano.u.uAlfa, alfa);
-      desenharPeca(progs.plano, d, false);
-    }
-    gl.disable(gl.STENCIL_TEST);
-    gl.enable(gl.DEPTH_TEST);
-    // 4) vidro do monóculo
-    usar(progs.vidro, P);
-    gl.uniform3fv(progs.vidro.u.uLuz, LUZ);
-    for (const d of vidros) {
-      gl.uniform3fv(progs.vidro.u.uCor, d.p.mat.cor); gl.uniform1f(progs.vidro.u.uAlfa, d.p.mat.alfa);
-      desenharPeca(progs.vidro, d, true);
+      if (m.tipo === "opaco" || m.tipo === "mascara" || m.tipo === "camada") {
+        const pr = progs.pintura;
+        gl.useProgram(pr.p);
+        gl.bindTexture(gl.TEXTURE_2D, modelo.texturas[m.tex] || modelo.texturas[0]);
+        gl.uniformMatrix4fv(pr.u.uP, false, P);
+        gl.uniform1i(pr.u.uTex, 0);
+        gl.uniform1f(pr.u.uReflexo, reflexo);
+        gl.uniform1f(pr.u.uNitidez, nitidez);
+        gl.uniform1f(pr.u.uOpaco, m.tipo === "opaco" ? 1 : 0);
+        if (m.tipo === "opaco") { gl.disable(gl.BLEND); gl.depthMask(true); }
+        else { gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(m.tipo === "mascara"); }
+        desenharPeca(pr, d);
+      } else if (m.tipo === "blush") {
+        const alfa = (estado.pesos.blush || 0) * 0.3;
+        if (alfa < 0.01) continue;
+        const pr = progs.blush;
+        gl.useProgram(pr.p);
+        gl.uniformMatrix4fv(pr.u.uP, false, P);
+        gl.uniform3fv(pr.u.uCor, m.cor);
+        gl.uniform1f(pr.u.uAlfa, alfa);
+        gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+        desenharPeca(pr, d);
+      }
     }
     gl.depthMask(true); gl.disable(gl.BLEND);
   }
 
-  function usar(pr, P) {
-    gl.useProgram(pr.p);
-    gl.uniformMatrix4fv(pr.u.uP, false, P);
-  }
-
-  function desenharPeca(pr, d, comNormal) {
+  function desenharPeca(pr, d) {
     const p = d.p;
-    gl.uniformMatrix4fv(pr.u.uMV, false, d.mv);
-    if (pr.u.uNM) gl.uniformMatrix3fv(pr.u.uNM, false, d.nm);
-    gl.bindBuffer(gl.ARRAY_BUFFER, p.bufP); gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-    if (comNormal) {
-      gl.bindBuffer(gl.ARRAY_BUFFER, p.bufN); gl.enableVertexAttribArray(1);
-      gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
-    } else gl.disableVertexAttribArray(1);
-    gl.bindBuffer(gl.ARRAY_BUFFER, p.bufC); gl.enableVertexAttribArray(2);
-    gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 0, 0);
+    gl.uniformMatrix4fv(pr.u.uOssos, false, d.ossos);
+    const attr = (loc, buf, n) => {
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, n, gl.FLOAT, false, 0, 0);
+    };
+    attr(0, p.bufP, 3); attr(1, p.bufUV, 2); attr(2, p.bufJ, 4); attr(3, p.bufW, 4);
     if (p.bufI) { gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, p.bufI); gl.drawElements(gl.TRIANGLES, p.n, p.tipoI, 0); }
     else gl.drawArrays(gl.TRIANGLES, 0, p.n);
+  }
+
+  // onde cada brilho está na tela agora (segue a cabeça)
+  function brilhosNaTela(q) {
+    if (!modelo || !modelo.mundos || !ultimaProj) return [];
+    const out = [];
+    const cache = {};
+    for (const b of modelo.brilhos) {
+      const no = modelo.nos.findIndex((n) => n.mesh === b.mesh);
+      if (no < 0) continue;
+      const ossos = cache[no] || (cache[no] = matrizesDaPele(modelo.mundos, no));
+      let p = [0, 0, 0];
+      for (let k = 0; k < 4; k++) {
+        if (!b.w[k]) continue;
+        const r = M.aplicar(ossos.subarray(b.j[k] * 16, b.j[k] * 16 + 16), b.p);
+        p = p.map((v, e) => v + r[e] * b.w[k]);
+      }
+      const c = M.aplicar(ultimaProj, p);
+      out.push([q.x + (c[0] * 0.5 + 0.5) * q.w, q.y + (0.5 - c[1] * 0.5) * q.h]);
+    }
+    return out;
   }
 
   // ================================================================= moldura, fundo, brilho e selo (2D, por cima)
@@ -602,6 +619,24 @@
     if (ef.forca > 0.01) { ctx.globalCompositeOperation = "soft-light"; ctx.fillStyle = rgba(ef.cor, ef.forca * 2.2); ctx.fillRect(q.x, q.y, q.w, q.h); }
     ctx.restore();
   }
+  function estrela(x, y, r, a) {
+    ctx.save(); ctx.translate(x, y); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+    g.addColorStop(0, "rgba(255,255,255,1)"); g.addColorStop(0.4, "rgba(214,200,255,0.8)"); g.addColorStop(1, "rgba(214,200,255,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(0, -r); ctx.quadraticCurveTo(r * 0.12, -r * 0.12, r, 0); ctx.quadraticCurveTo(r * 0.12, r * 0.12, 0, r);
+    ctx.quadraticCurveTo(-r * 0.12, r * 0.12, -r, 0); ctx.quadraticCurveTo(-r * 0.12, -r * 0.12, 0, -r);
+    ctx.fill(); ctx.restore();
+  }
+  function cintilar(q, t) {
+    const intenso = estado.modo === "pensando" || estado.modo === "executando" ? 1.6 : 1;
+    const esc = q.h / 330;
+    brilhosNaTela(q).forEach(([x, y], i) => {
+      const f = Math.sin(t * (0.9 + (i % 5) * 0.23) + i * 1.7);
+      if (f > 0.55) estrela(x, y, (4 + f * 3.5 * intenso) * esc, (f - 0.55) * 2.2);
+    });
+  }
   const COM_ICONE = ["dormindo", "pensando", "executando", "aguardando", "privado", "offline"];
   function selo(q, t) {
     const m = estado.modo;
@@ -669,6 +704,13 @@
     }
     estado.piscar = Math.max(0, estado.piscar - dt * 6.2);
 
+    // o brilho iridescente que atravessa a pintura
+    estado.proxReflexo -= dt;
+    if (estado.proxReflexo <= 0 && !olhosFechados && m !== "offline") {
+      estado.reflexo = 0; estado.proxReflexo = 7 + Math.random() * 8; movimento(1.3);
+    }
+    if (estado.reflexo >= 0) estado.reflexo = estado.reflexo + dt / 1.2 > 1 ? -1 : estado.reflexo + dt / 1.2;
+
     // olhar: pequenas mudanças de foco; olha para você quando ouve; para cima pensando
     const o = estado.olhar;
     o.prox -= dt;
@@ -723,6 +765,7 @@
       for (const [v] of VOGAIS) alvo[v] = (alvo[v] || 0) * (1 - a);
       alvo[estado.vogal] = Math.max(alvo[estado.vogal] || 0, a);
       alvo.sorriso = (alvo.sorriso || 0) * (1 - a * 0.4);
+      alvo.bravo = (alvo.bravo || 0) * (1 - a);                 // falando, os lábios não ficam apertados
     }
     const piscada = Math.sin(Math.min(1, estado.piscar) * Math.PI);
     const f = estado.forcado;
@@ -788,11 +831,12 @@
       ctx.save();
       moldura(q); ctx.clip();
       ctx.drawImage(fundoPronto(q), q.x, q.y, q.w, q.h);
-      if (modelo) {
+      if (modelo && modelo.texturas) {
         try {
           aplicarPesos(estado.pesos);
           desenhar3d(Math.round(q.w * dpr), Math.round(q.h * dpr), t);
           ctx.drawImage(tela3d, q.x, q.y, q.w, q.h);
+          if (!olhosFechados && estado.modo !== "offline" && !(estado.forcado && estado.forcado.quieto)) cintilar(q, t);
         } catch (e) { usarReserva(e.message); ctx.restore(); return; }
       }
       tingir(q, olhosFechados);
@@ -813,7 +857,7 @@
     voz(v) { estado.voz = v; },
     mic(v) { estado.mic = v; },
     gesto(g) { estado.gesto = g; estado.gestoT = performance.now() / 1000; movimento(1); },
-    forcar(f) { estado.forcado = f; acordar(); },          // testes: {piscar, boca, sorriso, olhar: [x, y], pesos, cabeca}
+    forcar(f) { estado.forcado = f; acordar(); },          // testes: {piscar, boca, sorriso, olhar: [x, y], pesos, cabeca, quieto}
     get estado() { return estado; },
   };
 
@@ -822,19 +866,18 @@
   if (!gl) { usarReserva("este navegador não tem WebGL"); return; }
   tela3d.addEventListener("webglcontextlost", (e) => { e.preventDefault(); usarReserva("a placa de vídeo reiniciou"); });
   try {
-    progs = {
-      toon: compilar(VERT_TOON, FRAG_TOON),
-      plano: compilar(VERT_PLANO, FRAG_PLANO),
-      vidro: compilar(VERT_TOON, FRAG_VIDRO),
-    };
+    progs = { pintura: compilar(VERT, FRAG_PINTURA), blush: compilar(VERT, FRAG_BLUSH) };
   } catch (e) { usarReserva("shader: " + e.message); return; }
   fetch(MODELO).then((r) => {
     if (!r.ok) throw new Error(`modelo ${r.status}`);
     return r.arrayBuffer();
-  }).then((buf) => {
-    modelo = montar(lerGLB(buf));
-    estado.malha = { triangulos: modelo.triangulos, pecas: modelo.pecas.length, expressoes: modelo.alvos,
-                     cabeca: modelo.cabeca >= 0 };
+  }).then(async (buf) => {
+    const g = lerGLB(buf);
+    const m = montar(g);
+    m.texturas = await texturas(g);
+    modelo = m;
+    estado.malha = { triangulos: m.triangulos, pecas: m.pecas.length, expressoes: m.alvos,
+                     cabeca: m.ossos.cabeca !== undefined, ossos: Object.keys(m.ossos), brilhos: m.brilhos.length };
     movimento(1);
   }).catch((e) => usarReserva(e.message));
   agendar();

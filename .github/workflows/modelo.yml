@@ -1,6 +1,7 @@
-# A Ametista em 3D é construída pelo modelo/construir_ametista.py dentro do Blender. Aqui o Blender (o módulo
-# bpy) reconstrói o modelo do zero e confere que sai igual ao que está no repositório e que o app consegue
-# usá-lo. Roda quando o modelo ou o motor do rosto mudam (baixa uns 400 MB).
+# A Ametista em 3D é construída pelo modelo/construir_ametista.py dentro do Blender, a partir do modelo 3D dela
+# (modelo/fonte/ametista_3d.glb) e da máscara do rosto (modelo/rosto/). Aqui o Blender (o módulo bpy) reconstrói o
+# modelo do zero e confere que sai igual ao que está no repositório e que o app consegue usá-lo. Roda quando o
+# modelo ou o motor do rosto mudam (baixa uns 400 MB).
 name: Modelo 3D
 
 on:
@@ -38,12 +39,15 @@ jobs:
           import bpy, os, sys
           sys.path.insert(0, "modelo")
           bpy.ops.wm.open_mainfile(filepath="modelo/ametista.blend")
-          bpy.ops.export_scene.gltf(filepath="/tmp/manual.glb", export_format="GLB", export_extras=True)
+          bpy.ops.export_scene.gltf(filepath="/tmp/manual.glb", export_format="GLB", export_extras=True,
+                                    export_image_format="WEBP")
           from compactar_glb import compactar, ler
           compactar("/tmp/manual.glb")
           j, _ = ler("/tmp/manual.glb")
           nomes = {n for m in j["meshes"] for n in m.get("extras", {}).get("targetNames", [])}
           assert {"piscar_direito", "boca_a", "sorriso"} <= nomes, nomes
-          assert any(n.get("name") == "Cabeca" for n in j["nodes"])
+          juntas = {j["nodes"][k]["name"] for s in j["skins"] for k in s["joints"]}
+          assert {"cabeca", "pescoco", "peito"} <= juntas, juntas
+          assert len(j["images"]) == 2, j["images"]
           print("exportação à mão OK:", os.path.getsize("/tmp/manual.glb") // 1024, "KB,", len(nomes), "expressões")
           PY
