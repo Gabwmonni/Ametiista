@@ -31,7 +31,7 @@ jobs:
           cmp web/ametista.glb /tmp/antes.glb && echo "igual ao do repositório" || (echo "o modelo do repositório está desatualizado: rode o construir_ametista.py" && exit 1)
           cmp web/ametista.glb celular/public/ametista.glb
       - name: O contrato com o app
-        run: python -m pytest tests/test_modelo.py -q
+        run: python -m pytest tests/test_modelo.py -q --noconftest
       - name: Exportar como o Blender exporta à mão e compactar dá o mesmo resultado
         run: |
           python - <<'PY'
