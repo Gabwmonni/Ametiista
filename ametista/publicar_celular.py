@@ -19,8 +19,7 @@ from .nuvem import gerar_chave
 
 PASTA = config.RAIZ / "celular"
 # arquivos da "casca" do app, na ordem do sw.js ("/" é o index.html)
-CASCA = ("index.html", "estilo.css", "app.js", "rosto.js", "ametista-retrato.webp", "manifest.webmanifest",
-         "icone-192.png")
+CASCA = ("index.html", "estilo.css", "app.js", "rosto.js", "ametista.glb", "manifest.webmanifest", "icone-192.png")
 
 
 def impressao_casca() -> str:

@@ -1,0 +1,49 @@
+# A Ametista em 3D é construída pelo modelo/construir_ametista.py dentro do Blender. Aqui o Blender (o módulo
+# bpy) reconstrói o modelo do zero e confere que sai igual ao que está no repositório e que o app consegue
+# usá-lo. Roda quando o modelo ou o motor do rosto mudam (baixa uns 400 MB).
+name: Modelo 3D
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "modelo/**"
+      - "web/rosto.js"
+      - "web/ametista.glb"
+      - "tests/test_modelo.py"
+      - ".github/workflows/modelo.yml"
+
+jobs:
+  modelo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Blender (módulo bpy)
+        run: pip install bpy==5.0.1 numpy pytest
+      - name: Reconstruir a Ametista do zero
+        run: |
+          cp web/ametista.glb /tmp/antes.glb
+          python modelo/construir_ametista.py
+          cmp web/ametista.glb /tmp/antes.glb && echo "igual ao do repositório" || (echo "o modelo do repositório está desatualizado: rode o construir_ametista.py" && exit 1)
+          cmp web/ametista.glb celular/public/ametista.glb
+      - name: O contrato com o app
+        run: python -m pytest tests/test_modelo.py -q
+      - name: Exportar como o Blender exporta à mão e compactar dá o mesmo resultado
+        run: |
+          python - <<'PY'
+          import bpy, os, sys
+          sys.path.insert(0, "modelo")
+          bpy.ops.wm.open_mainfile(filepath="modelo/ametista.blend")
+          bpy.ops.export_scene.gltf(filepath="/tmp/manual.glb", export_format="GLB", export_extras=True)
+          from compactar_glb import compactar, ler
+          compactar("/tmp/manual.glb")
+          j, _ = ler("/tmp/manual.glb")
+          nomes = {n for m in j["meshes"] for n in m.get("extras", {}).get("targetNames", [])}
+          assert {"piscar_direito", "boca_a", "sorriso"} <= nomes, nomes
+          assert any(n.get("name") == "Cabeca" for n in j["nodes"])
+          print("exportação à mão OK:", os.path.getsize("/tmp/manual.glb") // 1024, "KB,", len(nomes), "expressões")
+          PY

@@ -234,6 +234,23 @@ jobs:
           C:\Ametista\.venv\Scripts\python.exe tests\checar_atualizacao.py C:\Ametista || exit /b 1
           C:\Ametista\.venv\Scripts\python.exe -c "import winreg, sys; k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run'); v = winreg.QueryValueEx(k, 'Ametista')[0]; print(v); sys.exit('C:\\Ametista\\ametista.pyw' not in v)"
 
+  rosto_3d:
+    # O rosto 3D de verdade num navegador (WebGL por software): o modelo carrega, pisca, fala, sem erros;
+    # e sem WebGL entra o rosto de reserva.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Navegador
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1
+          npx playwright install --with-deps chromium
+      - name: Rosto 3D no navegador
+        run: node tests/checar_rosto_3d.mjs
+
   celular:
     runs-on: ubuntu-latest
     timeout-minutes: 10

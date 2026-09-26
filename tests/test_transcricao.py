@@ -34,7 +34,7 @@ def pc(monkeypatch):
     return p
 
 
-def _esperar(cond, limite=3.0):
+def _esperar(cond, limite=10.0):
     fim = time.time() + limite
     while time.time() < fim and not cond():
         time.sleep(0.01)

@@ -13,3 +13,5 @@ celular/node_modules/
 celular/.wrangler/
 celular/.dev.vars
 celular/wrangler.log
+*.blend1
+modelo/exportado.glb
