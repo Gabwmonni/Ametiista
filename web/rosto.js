@@ -606,9 +606,10 @@
   function selo(q, t) {
     const m = estado.modo;
     if (!COM_ICONE.includes(m)) return;
-    const r = Math.max(9, Math.min(W, H) * 0.12);
+    const r = Math.max(9, Math.min(W, H) * 0.11);
     ctx.save();
-    ctx.translate(q.x + q.w - r * 0.75, q.y + r * 0.75);
+    // inteiro dentro da moldura (onde o fundo é repintado a cada quadro)
+    ctx.translate(q.x + q.w - r - q.r * 0.3, q.y + r + q.r * 0.3);
     ctx.fillStyle = "rgba(22,14,38,0.78)"; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = "rgba(203,178,248,0.6)"; ctx.lineWidth = Math.max(1, r * 0.08); ctx.stroke();
     ctx.fillStyle = "#e0d2fb"; ctx.strokeStyle = "#e0d2fb"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -724,13 +725,13 @@
       alvo.sorriso = (alvo.sorriso || 0) * (1 - a * 0.4);
     }
     const piscada = Math.sin(Math.min(1, estado.piscar) * Math.PI);
-    const fechado = Math.max(estado.fechar, piscada, alvo.piscar || 0);
+    const f = estado.forcado;
+    const fechado = f && f.piscar != null ? f.piscar : Math.max(estado.fechar, piscada, alvo.piscar || 0);
     delete alvo.piscar;
     alvo.piscar_direito = alvo.piscar_esquerdo = fechado;
     if (fechado > 0.5) alvo.olhos_felizes = (alvo.olhos_felizes || 0) * (1 - fechado);
     alvo.olhar_esquerda = Math.max(0, -o.x); alvo.olhar_direita = Math.max(0, o.x);
     alvo.olhar_cima = Math.max(0, o.y); alvo.olhar_baixo = Math.max(0, -o.y);
-    const f = estado.forcado;
     if (f) {
       if (f.piscar != null) alvo.piscar_direito = alvo.piscar_esquerdo = f.piscar;
       if (f.boca != null) { for (const [v] of VOGAIS) alvo[v] = 0; alvo.boca_a = f.boca; }

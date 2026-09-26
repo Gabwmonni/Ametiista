@@ -93,7 +93,8 @@ test("pisca, fala e sorri mexendo as shape keys (só recalcula o que muda)", asy
   Rosto.modo("falando"); Rosto.voz(0.8);
   rodar(1);
   const bocas = ["boca_a", "boca_e", "boca_i", "boca_o", "boca_u"].map((n) => Rosto.estado.pesos[n] || 0);
-  assert.ok(Math.max(...bocas) > 0.5, `falando: a boca abre (${bocas})`);
+  const soma = bocas.reduce((a, b) => a + b, 0);                 // (na troca de vogal, a abertura se divide)
+  assert.ok(Rosto.estado.boca > 0.6 && soma > 0.6, `falando: a boca abre (${Rosto.estado.boca}; ${bocas})`);
   Rosto.voz(0); Rosto.modo("ocioso"); Rosto.emocao("feliz");
   rodar(2);
   assert.ok(Rosto.estado.pesos.sorriso > 0.7 && Rosto.estado.pesos.blush > 0.7, "feliz: sorri e cora");
