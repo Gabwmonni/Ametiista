@@ -142,8 +142,11 @@ CAMPOS: list[Campo] = [
           ajuda="Menor = percebe voz mais baixa. Maior = ignora mais barulho (200 a 600)."),
     Campo("WHISPER_MODELO", "small", "Ouvido", "Precisão da transcrição", tipo="opcao", reiniciar=True,
           opcoes=(("base", "Rápida"), ("small", "Equilibrada"), ("medium", "Precisa (precisa de PC forte)"))),
-    Campo("WHISPER_DISPOSITIVO", "cpu", "Ouvido", "Transcrever com", tipo="opcao", reiniciar=True,
-          opcoes=(("cpu", "Processador"), ("cuda", "Placa NVIDIA (CUDA)"))),
+    Campo("WHISPER_DISPOSITIVO", "auto", "Ouvido", "Transcrever com", tipo="opcao", reiniciar=True,
+          opcoes=(("auto", "Automático (placa NVIDIA quando funcionar)"), ("cpu", "Processador"),
+                  ("cuda", "Placa NVIDIA (CUDA)")),
+          ajuda="Na placa ela entende o que você disse bem mais rápido. No automático, a placa é testada "
+                "sozinha na primeira vez; se não servir, fica no processador."),
     Campo("TEMPO_SEGUIMENTO", "8", "Ouvido", "Segundos ouvindo depois de responder", tipo="numero",
           conversor=_float(8), ajuda="Nesse tempo você fala sem repetir o nome."),
     Campo("CONVERSA_MINUTOS", "3", "Ouvido", "Minutos de conversa contínua", tipo="numero",
@@ -307,6 +310,7 @@ def salvar(novos: dict[str, str]) -> list[str]:
 MIGRACOES = {
     2: [("VOZ_VELOCIDADE", "+5%", "-4%")],     # voz mais calma e atenciosa
     3: [("OLLAMA_MODELO", "qwen2.5:3b", "qwen2.5:7b")],   # cérebro local que sabe usar as ferramentas
+    4: [("WHISPER_DISPOSITIVO", "cpu", "auto")],         # ouvir mais rápido: placa NVIDIA quando funcionar
 }
 VERSAO_CONFIG = max(MIGRACOES)
 _MARCA = "# versão das configurações:"

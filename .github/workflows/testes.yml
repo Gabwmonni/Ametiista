@@ -34,6 +34,8 @@ jobs:
         run: python tests/checar_semantica.py
       - name: App de desktop sobe, responde e fala
         run: python tests/checar_desktop.py
+      - name: Ouve rápido (Whisper de verdade, frases faladas no ritmo do microfone)
+        run: python tests/checar_ouvido.py
 
   ollama:
     # O cérebro local com um Ollama de verdade (CPU, modelo pequeno): o formato das ferramentas tem que bater.

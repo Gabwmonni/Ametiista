@@ -31,6 +31,7 @@ Ela liga junto com o PC e fica quietinha no ícone 💎 perto do relógio.
 | Voz | **Voz clonada no próprio PC** num Python separado (placa NVIDIA, incluindo as RTX 50), fluida, sem pesar o resto; o `clonar_voz.bat` escolhe sozinho os melhores trechos das gravações |
 | Aparência | **Ela inteira, viva**, na barra do PC e no celular: a ilustração da ficha pisca, fala, sorri, respira e brilha |
 | Barra | No **canto esquerdo de baixo** (não tapa mais o meio da tela) e **arrastável** pelo rosto; lembra onde você a deixou |
+| Ouvido | **Entende mais rápido**: transcreve já na pausa do fim da fala, identifica a voz ao mesmo tempo, Whisper aquecido e na placa NVIDIA quando funciona; nada se perde depois de um "Ametista" sozinho |
 
 ## O que mudou da 1.0 para a 2.0
 
@@ -103,6 +104,8 @@ Para conferir se o celular está na versão nova: **Diagnóstico** no painel avi
 **Parar tudo** é o botão de emergência: cala a Ametista, cancela o que ela estiver fazendo (inclusive tarefas do modo agente e confirmações pendentes), pausa a música e cancela um desligamento agendado. Funciona pelo atalho, pelo botão ■ na barra, pelo menu do 💎 e pelo celular.
 
 **Pedidos incompletos:** ela sabe o que fez por último. *"Abre de novo"*, *"desfaz"*, *"não esse, o outro"*, *"mais alto"* funcionam.
+
+**Ela entende rápido:** a transcrição começa já na pausa do fim da sua fala (se você continuar falando, ela descarta e espera), confere quem está falando ao mesmo tempo, e o Whisper roda na **placa NVIDIA** quando ela funciona (sozinho: na primeira vez a placa é testada à parte, com o processador já ouvindo). Se você disser só "Ametista" e fizer uma pausa, o que disser em seguida não se perde.
 
 **Pedidos difíceis:** ela começa a falar logo, com o modelo rápido. Se o pedido pedir mais (uma análise, uma explicação longa, olhar a tela, uma tarefa grande), ela passa para o modelo forte sozinha.
 
@@ -535,7 +538,8 @@ Ela confere internet, Claude, Ollama (e se o modelo sabe usar as ferramentas), m
 | Acorda sozinha com barulho | Ouvido → Sensibilidade: 600 |
 | Às vezes não me reconhece | Pessoas → Rigor: 0.55, ou refaça o cadastro |
 | Reconhece gente demais | Pessoas → Rigor: 0.70 |
-| Transcrição lenta | Ouvido → Precisão: Rápida. Com NVIDIA: Transcrever com: Placa NVIDIA |
+| Transcrição lenta | Veja no diagnóstico se ela está transcrevendo na placa NVIDIA. Sem placa: Ouvido → Precisão: Rápida |
+| Ela me corta antes de eu terminar | Fale sem pausas longas no meio; se continuar, Ouvido → Sensibilidade: 200 (ela passa a perceber a fala mais baixa como fala) |
 | Responde conversa que não era para ela | Ouvido → Minutos de conversa contínua: 1 (0 desliga) |
 | Ela me interrompe sozinha / se interrompe | Ouvido → Interromper pela voz: desligado |
 | Voz fina ou grossa demais, rápida ou lenta demais | Voz → Tom e Velocidade (toque em Ouvir para comparar antes de salvar) |
@@ -553,6 +557,7 @@ Tudo isso também está no `.env` (o `.env.example` explica cada linha).
 ## 21. Leve para o PC
 
 - **Rosto:** a ilustração é redimensionada uma vez só (uma imagem de 33 KB); a cada quadro só as pálpebras, a boca e os brilhos mexem por cima, e as cores das emoções são misturas simples (sem filtros). 24 quadros por segundo falando, 8 parada ou dormindo, e **zero** quando a barra está escondida.
+- **Ouvido:** o Whisper é carregado e aquecido uma vez (a primeira frase já sai rápida), usa metade dos núcleos do processador (de 4 a 8) ou a placa NVIDIA, sem marcas de tempo e sem repetir a transcrição.
 - **Palavra de ativação:** o reconhecedor descansa depois de 1,5 s de silêncio. No primeiro som ele volta, com o meio segundo anterior, para não perder o começo do "Ametista".
 - **Busca por significado:** o modelo carrega em segundo plano e nunca atrasa uma resposta.
 - **Celular:** sem ninguém olhando, nada de status, Spotify ou medição do PC.

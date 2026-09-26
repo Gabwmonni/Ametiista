@@ -107,8 +107,10 @@ def _ouvido() -> list[dict]:
         else:
             itens.append(_item("Microfone", OK, f"ouvindo (ruído ambiente {s['ruido']}, sensibilidade "
                                                 f"{config.LIMIAR_MIN:.0f})"))
+        onde = "na placa NVIDIA" if s.get("dispositivo") == "cuda" else "no processador"
         itens.append(_item("Palavra de ativação e transcrição", OK if s["vosk"] and s["whisper"] else AVISO,
-                           "Vosk e Whisper carregados" if s["vosk"] and s["whisper"] else "Whisper ainda carregando"))
+                           f"Vosk e Whisper carregados (transcrevendo {onde})" if s["vosk"] and s["whisper"]
+                           else "Whisper ainda carregando"))
     pessoas = identidade.pessoas()
     if not identidade.disponivel():
         itens.append(_item("Reconhecer quem fala", ERRO, "modelo não instalado (rode o instalar.bat)"))

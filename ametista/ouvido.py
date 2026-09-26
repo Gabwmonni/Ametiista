@@ -3,7 +3,10 @@
 Etapas:
   1. ESPERA      Vosk (leve, offline) procura a palavra "Ametista".
   2. GRAVANDO    Ao ouvir o nome, grava o pedido até você parar de falar.
-  3. PROCESSANDO faster-whisper transcreve e confere quem está falando.
+  3. PROCESSANDO faster-whisper transcreve e confere quem está falando (ao mesmo tempo). Para ser rápida, a
+                 transcrição começa já na pausa do fim da fala (se você voltar a falar, ela é descartada), o
+                 Whisper usa a placa NVIDIA quando dá (transcricao.py) e o que você diz enquanto ela processa
+                 um "Ametista" sozinho não se perde.
   4. FALANDO     Enquanto ela responde, só presta atenção em "Ametista" e em "para" (interrupção por voz).
   5. SEGUIMENTO  Logo depois da resposta, ouve alguns segundos sem precisar do nome.
      CONVERSA    Depois disso, por alguns minutos, continua atenta: se você falar com ela sem o nome, ela
@@ -18,7 +21,7 @@ from collections import deque
 
 import numpy as np
 
-from . import config, estado, eventos, identidade
+from . import config, estado, eventos, identidade, transcricao
 
 TAXA = 16000
 AMOSTRAS = 1280                 # 80 ms por bloco
@@ -26,7 +29,9 @@ DUR = AMOSTRAS / TAXA
 PREROLL = 20                    # 1,6 s de áudio antes do gatilho (inclui o próprio nome)
 BLOCOS_ATE_DESCANSAR = 19       # 1,5 s de silêncio e o reconhecedor da palavra de ativação descansa
 PREROLL_ACORDAR = 8             # ao acordar, ele recebe os 0,64 s anteriores ao primeiro som
-SILENCIO_FIM = 0.9              # segundos de silêncio que encerram o pedido
+SILENCIO_FIM = 0.8              # segundos de silêncio que encerram o pedido
+SILENCIO_ADIANTAR = 0.4         # com esse silêncio a transcrição já começa (e é descartada se você continuar)
+DURANTE_MAX = 75                # até 6 s do que você diz enquanto ela processa um "Ametista" sozinho
 MAX_PEDIDO = 14
 ESPERA_SEM_FALA = 5
 SEGURANCA_FALA = 90             # se a tela não avisar que terminou de falar
@@ -54,6 +59,34 @@ def tirar_nome(texto: str) -> tuple[str, bool]:
     return texto[m.end():].strip(" ,.!?:"), True
 
 
+def _nivel(bloco: bytes) -> float:
+    amostras = np.frombuffer(bloco, np.int16).astype(np.float32)
+    return float(np.sqrt(np.mean(amostras ** 2))) if len(amostras) else 0.0
+
+
+class _EmParalelo:
+    """Roda uma função numa thread e entrega o resultado quando pedido (ou a exceção dela)."""
+
+    def __init__(self, funcao, *args):
+        self._valor, self._erro = None, None
+        self._fim = threading.Event()
+
+        def rodar():
+            try:
+                self._valor = funcao(*args)
+            except Exception as e:
+                self._erro = e
+            self._fim.set()
+
+        threading.Thread(target=rodar, daemon=True).start()
+
+    def resultado(self):
+        self._fim.wait()
+        if self._erro:
+            raise self._erro
+        return self._valor
+
+
 _instancia: "Ouvido | None" = None
 _whisper_avulso = None
 _trava_avulso = threading.Lock()
@@ -76,12 +109,30 @@ def transcrever_bytes(dados: bytes) -> str:
     global _whisper_avulso
     with _trava_avulso:
         if _whisper_avulso is None:
-            from faster_whisper import WhisperModel
+            _whisper_avulso = transcricao.abrir("cpu")
+    return transcricao.texto(_whisper_avulso, audio)
 
-            _whisper_avulso = WhisperModel(config.WHISPER_MODELO, device="cpu", compute_type="int8")
-    segs, _ = _whisper_avulso.transcribe(audio, language="pt", beam_size=1,
-                                         initial_prompt=f"{config.NOME}, abre a Steam, toca no Spotify.")
-    return "".join(s.text for s in segs).strip()
+
+class _Adiantada:
+    """Transcrição começada na pausa do fim da fala, rodando enquanto o silêncio se confirma."""
+
+    def __init__(self, ouvido: "Ouvido", pcm: bytes):
+        self.pcm, self.texto, self.erro = pcm, "", None
+        self._pronta = threading.Event()
+        threading.Thread(target=self._rodar, args=(ouvido,), daemon=True, name="transcricao-adiantada").start()
+
+    def _rodar(self, ouvido: "Ouvido") -> None:
+        try:
+            self.texto = ouvido.transcrever(self.pcm)
+        except Exception as e:
+            self.erro = e
+        self._pronta.set()
+
+    def resultado(self) -> str:
+        self._pronta.wait()
+        if self.erro:
+            raise self.erro
+        return self.texto
 
 
 class Ouvido:
@@ -102,6 +153,11 @@ class Ouvido:
         self._vosk_descansando = False
         self._whisper = None
         self._whisper_pronto = threading.Event()
+        self.dispositivo = "cpu"                # onde o Whisper roda (cpu ou cuda)
+        self._trava = threading.RLock()         # o microfone e o processamento mexem no mesmo estado
+        self._adiantada: _Adiantada | None = None
+        self._depois_adiantar = 0               # blocos com som (acima do ruído) depois que ela adiantou
+        self._durante: list[bytes] = []         # o que chegou enquanto processava um "Ametista" sozinho
         self._apos_fala = "espera"
         self._falando_desde = 0.0
         self._texto_falando = ""
@@ -124,7 +180,7 @@ class Ouvido:
 
     def status(self) -> dict:
         return {"estado": self.estado, "mudo": self.mudo, "privado": self.mudo_privado,
-                "vosk": self._vosk is not None, "whisper": self._whisper_pronto.is_set(),
+                "vosk": self._vosk is not None, "whisper": self._whisper_pronto.is_set(), "dispositivo": self.dispositivo,
                 "microfone": self.microfone_ok, "ultimo_audio_s": round(time.time() - self.ultimo_bloco, 1)
                 if self.ultimo_bloco else None, "ruido": round(self.ruido), "nivel": round(self.nivel)}
 
@@ -140,28 +196,30 @@ class Ouvido:
         threading.Thread(target=self._carregar_whisper, daemon=True).start()
 
     def _carregar_whisper(self) -> None:
-        from faster_whisper import WhisperModel
-
         t = time.time()
-        dispositivo = config.WHISPER_DISPOSITIVO
+
+        def trocar(modelo) -> None:            # a placa NVIDIA ficou pronta depois: passa a usar ela
+            self._whisper, self.dispositivo = modelo, "cuda"
+
+        carregador = transcricao.Carregador(ao_trocar=trocar)
         try:
-            self._whisper = WhisperModel(config.WHISPER_MODELO, device=dispositivo,
-                                         compute_type="int8" if dispositivo == "cpu" else "default")
-        except Exception as e:  # GPU sem CUDA etc.
-            print(f"[ouvido] Whisper em {dispositivo} falhou ({e}); usando CPU")
-            self._whisper = WhisperModel(config.WHISPER_MODELO, device="cpu", compute_type="int8")
-        print(f"[ouvido] Whisper '{config.WHISPER_MODELO}' pronto em {time.time() - t:.1f}s")
+            self._whisper = carregador.carregar()
+        except Exception as e:
+            print(f"[ouvido] Whisper não carregou: {e}")
+            return
+        self.dispositivo = carregador.dispositivo
+        print(f"[ouvido] Whisper '{config.WHISPER_MODELO}' pronto ({self.dispositivo}) em {time.time() - t:.1f}s")
         self._whisper_pronto.set()
+        try:  # a identificação de voz também já carregada: a primeira frase não espera por ela
+            if config.MODO_VOZ != "aberto" and identidade.tem_cadastro():
+                identidade.disponivel()
+        except Exception:
+            pass
 
     def transcrever(self, pcm: bytes) -> str:
         self._whisper_pronto.wait()
         audio = np.frombuffer(pcm, np.int16).astype(np.float32) / 32768.0
-        segmentos, _ = self._whisper.transcribe(
-            audio, language="pt", beam_size=1, condition_on_previous_text=False,
-            initial_prompt=f"{config.NOME}, abre a Steam, toca no Spotify, abre o YouTube, "
-                           "o que tem na minha agenda amanhã? Que horas são?",
-        )
-        return "".join(s.text for s in segmentos).strip()
+        return transcricao.texto(self._whisper, audio)
 
     # ------------------------------------------------------------ eventos externos
     def _evento(self, msg: dict) -> None:
@@ -329,6 +387,7 @@ class Ouvido:
         self.duracao = 0.0
         self.silencio = 0.0
         self.falou = origem == "nome"  # o próprio nome já foi fala
+        self._adiantada, self._depois_adiantar = None, 0
 
     def _iniciar_gravacao(self, origem: str, preroll: list[bytes]) -> None:
         self._reset_gravacao(origem, preroll)
@@ -346,13 +405,15 @@ class Ouvido:
         """Recebe 80 ms de áudio PCM 16 bits mono 16 kHz."""
         self.relogio += DUR
         self.ultimo_bloco = time.time()
-        amostras = np.frombuffer(bloco, np.int16).astype(np.float32)
-        nivel = float(np.sqrt(np.mean(amostras ** 2))) if len(amostras) else 0.0
+        nivel = _nivel(bloco)
         self.nivel = nivel
         self.pre.append(bloco)
-
         if self.mudo:
             return
+        with self._trava:
+            self._alimentar(bloco, nivel)
+
+    def _alimentar(self, bloco: bytes, nivel: float) -> None:
         e = self.estado
 
         if e == "espera":
@@ -401,23 +462,39 @@ class Ouvido:
         elif e == "gravando":
             if self.origem != "conversa":
                 self._enviar_mic(nivel)
-            self.audio.append(bloco)
-            self.duracao += DUR
-            if nivel > self.limiar:
-                self.falou, self.silencio = True, 0.0
-            else:
-                self.silencio += DUR
-            espera_max = 12 if self.origem == "cadastro" else ESPERA_SEM_FALA
-            if (self.falou and self.silencio >= SILENCIO_FIM) or self.duracao >= MAX_PEDIDO or \
-                    (not self.falou and self.duracao >= espera_max):
-                self.estado = "processando"
-                pcm, origem, falou = b"".join(self.audio), self.origem, self.falou
-                threading.Thread(target=self._processar, args=(pcm, origem, falou), daemon=True).start()
+            self._gravar(bloco, nivel)
 
         elif e in ("falando", "processando"):
+            if e == "processando" and self.origem == "nome" and len(self._durante) < DURANTE_MAX:
+                self._durante.append(bloco)
             self._escutar_interrupcao(bloco)
             if self.estado == "falando" and self.relogio - self._falando_desde > SEGURANCA_FALA:
                 self._depois_de_falar()
+
+    def _gravar(self, bloco: bytes, nivel: float) -> None:
+        self.audio.append(bloco)
+        self.duracao += DUR
+        if nivel > self.limiar:
+            self.falou, self.silencio = True, 0.0
+            self._adiantada = None                      # voltou a falar: a transcrição adiantada não vale
+        else:
+            self.silencio += DUR
+            if self._adiantada is not None and nivel > max(self.ruido * 1.8, 60.0):
+                self._depois_adiantar += 1              # som fraco depois de adiantar (uma última palavra baixa?)
+        if self.origem == "cadastro":
+            espera_max = 12
+        else:
+            espera_max = ESPERA_SEM_FALA
+            if self.falou and self._adiantada is None and self.silencio >= SILENCIO_ADIANTAR and \
+                    self._whisper_pronto.is_set() and self.duracao < MAX_PEDIDO:
+                self._adiantada, self._depois_adiantar = _Adiantada(self, b"".join(self.audio)), 0
+        if (self.falou and self.silencio >= SILENCIO_FIM) or self.duracao >= MAX_PEDIDO or \
+                (not self.falou and self.duracao >= espera_max):
+            self.estado = "processando"
+            adiantada = self._adiantada if self._depois_adiantar < 2 and self.silencio >= SILENCIO_FIM else None
+            pcm, origem, falou = b"".join(self.audio), self.origem, self.falou
+            self._adiantada, self._durante = None, []
+            threading.Thread(target=self._processar, args=(pcm, origem, falou, adiantada), daemon=True).start()
 
     def _enviar_mic(self, nivel: float) -> None:
         if self.relogio - self._ultimo_mic >= 0.08:
@@ -431,7 +508,7 @@ class Ouvido:
             self.estado = "espera"
             eventos.publicar({"tipo": "ocioso"})
 
-    def _processar(self, pcm: bytes, origem: str, falou: bool) -> None:
+    def _processar(self, pcm: bytes, origem: str, falou: bool, adiantada: "_Adiantada | None" = None) -> None:
         conversa = origem == "conversa"
         try:
             if origem == "cadastro":
@@ -440,7 +517,8 @@ class Ouvido:
             if not falou:
                 self._voltar_a_ouvir(conversa)
                 return
-            texto = self.transcrever(pcm)
+            quem = _EmParalelo(identidade.identificar, pcm)      # quem fala, enquanto transcreve
+            texto = adiantada.resultado() if adiantada else self.transcrever(pcm)
             pedido, achou = tirar_nome(texto)
             print(f"[ouvido] ({origem}) ouvi: {texto!r}")
 
@@ -449,11 +527,11 @@ class Ouvido:
                 return
             if ALUCINACOES.match(pedido) or len(pedido) < 2:
                 if origem == "nome":  # disse só "Ametista" e fez pausa: espera o pedido
-                    self._iniciar_gravacao("continuacao", [])
+                    self._continuar_depois_do_nome()
                 else:
                     self._voltar_a_ouvir(conversa)
                 return
-            falante = identidade.identificar(pcm)
+            falante = quem.resultado()
             if falante.nivel == "desconhecido" or (conversa and not achou and identidade.tem_cadastro()
                                                    and not falante.conhecido):
                 print(f"[ouvido] voz não reconhecida ({falante.confianca:.2f}); ignorando")
@@ -473,6 +551,19 @@ class Ouvido:
             print(f"[ouvido] erro ao processar: {e}")
             self.estado = "espera"
             eventos.publicar({"tipo": "ocioso"})
+
+    def _continuar_depois_do_nome(self) -> None:
+        """Você disse só "Ametista" e fez uma pausa: grava o pedido, sem perder o que já disse enquanto ela
+        transcrevia o nome."""
+        with self._trava:
+            if self.estado != "processando":
+                return
+            durante, self._durante = self._durante, []
+            self._iniciar_gravacao("continuacao", [])
+            for bloco in durante:
+                if self.estado != "gravando":
+                    break
+                self._gravar(bloco, _nivel(bloco))
 
     # ------------------------------------------------------------ microfone
     def iniciar(self) -> bool:

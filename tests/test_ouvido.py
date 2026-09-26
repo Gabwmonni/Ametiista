@@ -195,3 +195,102 @@ def test_reconhecedor_descansa_no_silencio_e_nao_perde_o_comeco(o):
     o.alimentar(ALTO)                                      # primeiro som: acorda com o áudio anterior
     assert len(chamadas) == ouvido.PREROLL_ACORDAR + 1 and chamadas[-1] == ALTO
     assert o.estado == "gravando"
+
+
+# ------------------------------------------------------------------ ouvir rápido
+def _transcricoes(o, monkeypatch, respostas, demora=0.0):
+    """transcrever falso: devolve as respostas em ordem e anota o tamanho do áudio de cada chamada."""
+    chamadas = []
+
+    def transcrever(pcm):
+        chamadas.append(len(pcm))
+        if demora:
+            time.sleep(demora)
+        return respostas[min(len(chamadas), len(respostas)) - 1]
+
+    monkeypatch.setattr(o, "transcrever", transcrever)
+    return chamadas
+
+
+def _acordar(o):
+    o._vosk.parcial = "ametista"
+    o.alimentar(MUDO)
+    assert o.estado == "gravando"
+
+
+def test_transcricao_comeca_na_pausa_e_e_aproveitada(o, monkeypatch):
+    chamadas = _transcricoes(o, monkeypatch, ["Ametista, que horas são?"])
+    _acordar(o)
+    _alimentar(o, ALTO, 10)
+    _alimentar(o, MUDO, 5)                                   # 0,4 s de pausa: já começa a transcrever
+    assert o.estado == "gravando"
+    assert _esperar(lambda: len(chamadas) == 1), "a transcrição começa antes do fim do silêncio"
+    _alimentar(o, MUDO, 6)                                   # completou o silêncio do fim
+    assert _esperar(lambda: o.pedidos)
+    assert o.pedidos[0][0] == "que horas são"
+    assert len(chamadas) == 1, "não transcreve de novo o mesmo áudio"
+
+
+def test_se_voltar_a_falar_a_transcricao_adiantada_e_descartada(o, monkeypatch):
+    chamadas = _transcricoes(o, monkeypatch, ["Ametista, toca", "Ametista, toca uma música calma"])
+    _acordar(o)
+    _alimentar(o, ALTO, 8)
+    _alimentar(o, MUDO, 5)                                   # pausa no meio da frase
+    assert _esperar(lambda: len(chamadas) == 1)
+    _alimentar(o, ALTO, 8)                                   # continuou falando
+    _alimentar(o, MUDO, 11)
+    assert _esperar(lambda: o.pedidos)
+    assert o.pedidos[0][0] == "toca uma música calma"
+    assert len(chamadas) == 2 and chamadas[1] > chamadas[0], "a frase inteira foi transcrita"
+
+
+def test_palavra_baixinha_no_fim_invalida_a_transcricao_adiantada(o, monkeypatch):
+    chamadas = _transcricoes(o, monkeypatch, ["Ametista, toca música", "Ametista, toca música relaxante"])
+    baixo = (np.ones(ouvido.AMOSTRAS) * (o.limiar + max(o.ruido * 1.8, 60)) / 2).astype(np.int16).tobytes()
+    _acordar(o)
+    _alimentar(o, ALTO, 8)
+    _alimentar(o, MUDO, 5)
+    assert _esperar(lambda: len(chamadas) == 1)
+    _alimentar(o, baixo, 3)                                  # abaixo do limiar, mas é voz
+    _alimentar(o, MUDO, 10)
+    assert _esperar(lambda: o.pedidos)
+    assert o.pedidos[0][0] == "toca música relaxante" and len(chamadas) == 2
+
+
+def test_so_o_nome_e_pausa_nao_perde_o_pedido_dito_enquanto_ela_processa(o, monkeypatch):
+    # a primeira transcrição ("Ametista.") demora; enquanto isso você já fala o pedido
+    chamadas = _transcricoes(o, monkeypatch, ["Ametista.", "Que horas são?"], demora=0.3)
+    _acordar(o)
+    _alimentar(o, ALTO, 6)
+    _alimentar(o, MUDO, 11)                                  # pausa: fecha a gravação só com o nome
+    assert _esperar(lambda: o.estado == "processando")
+    _alimentar(o, ALTO, 10)                                  # o pedido, dito durante o processamento
+    _alimentar(o, MUDO, 12)
+    assert _esperar(lambda: o.pedidos, limite=5)
+    assert o.pedidos[0][0] == "Que horas são?"
+    assert len(chamadas) == 2
+
+
+def test_identifica_quem_fala_ao_mesmo_tempo_que_transcreve(o, monkeypatch):
+    comecos = {}
+
+    def identificar(pcm):
+        comecos["identificar"] = time.time()
+        time.sleep(0.3)
+        return DONO_PADRAO
+
+    def transcrever(pcm):
+        comecos["transcrever"] = time.time()
+        time.sleep(0.3)
+        return "Ametista, abre o YouTube"
+
+    monkeypatch.setattr(identidade, "identificar", identificar)
+    monkeypatch.setattr(o, "transcrever", transcrever)
+    _acordar(o)
+    _alimentar(o, ALTO, 8)
+    o.silencio, o._whisper_pronto = 0.0, type("Nunca", (), {"is_set": lambda self: False, "wait": lambda self: True})()
+    inicio = time.time()
+    _alimentar(o, MUDO, 11)
+    assert _esperar(lambda: o.pedidos)
+    assert time.time() - inicio < 0.55, "as duas coisas rodam juntas (0,3 s cada)"
+    assert abs(comecos["identificar"] - comecos["transcrever"]) < 0.15
