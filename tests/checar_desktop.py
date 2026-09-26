@@ -65,6 +65,22 @@ try:
         print("resposta:", trecho["texto"], "| áudio:", "sim" if trecho["audio"] else "voz do sistema")
         assert trecho["texto"].startswith("São ")
         assert trecho["audio"], "a voz padrão (Francisca, calma, tom leve) não gerou áudio"
+        # arrastar a janela pelo rosto: ela vai junto e lembra o lugar (canto de baixo à esquerda dela)
+        ws.send(json.dumps({"tipo": "mover_inicio"}))
+        for k in range(1, 6):
+            ws.send(json.dumps({"tipo": "mover", "dx": 30 * k, "dy": -20 * k}))
+        ws.send(json.dumps({"tipo": "mover_fim"}))
+        arquivo, ancora = TMP / "dados" / "estado.json", None
+        fim = time.time() + 10
+        while time.time() < fim and not ancora:
+            time.sleep(0.3)
+            try:
+                ancora = json.loads(arquivo.read_text(encoding="utf-8")).get("janela_ancora")
+            except (OSError, ValueError):
+                pass
+        if not ancora or ancora[0] < 100:
+            falhar(f"arrastar a janela não moveu nem guardou o lugar: {ancora}")
+        print("janela arrastada para", ancora)
     # o painel ouve uma combinação ainda não salva (voz, velocidade e tom)
     for voz_id, tom in (("pt-BR-FranciscaNeural", "+8Hz"), ("pt-BR-ThalitaMultilingualNeural", "+16Hz")):
         r = httpx.post(BASE + "/api/testar-voz", headers={"X-Ametista-Token": token}, timeout=60,

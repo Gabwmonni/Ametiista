@@ -20,12 +20,14 @@ button { font: inherit; color: inherit; }
 /* No navegador (modo de teste) simula uma área de trabalho atrás */
 body.navegador { background: linear-gradient(135deg, #1f3b5c, #3a2d5c 55%, #5c2d4a); }
 
+/* No canto esquerdo de baixo (a janela é do tamanho do painel; arrastando o rosto ou a barra de cima, ela vai
+   para onde você quiser e fica lá) */
 .painel {
-  position: fixed; left: 50%; bottom: 18px; width: min(700px, calc(100% - 32px));
-  transform: translate(-50%, 40px) scale(.97); opacity: 0; pointer-events: none;
+  position: fixed; left: 12px; bottom: 12px; width: min(540px, calc(100% - 24px));
+  transform: translateY(40px) scale(.97); transform-origin: left bottom; opacity: 0; pointer-events: none;
   transition: transform .35s cubic-bezier(.2, .9, .3, 1.2), opacity .25s ease, width .25s ease;
 }
-.painel.visivel { transform: translate(-50%, 0) scale(1); opacity: 1; pointer-events: auto; }
+.painel.visivel { transform: none; opacity: 1; pointer-events: auto; }
 
 /* Borda luminosa animada (estilo assistente do celular) */
 .borda {
@@ -56,11 +58,13 @@ body.navegador { background: linear-gradient(135deg, #1f3b5c, #3a2d5c 55%, #5c2d
   position: relative; z-index: 1; display: flex; flex-direction: column;
   background: var(--vidro); border-radius: 28px; padding: 14px 16px 14px 10px;
 }
-.barra { display: flex; gap: 14px; align-items: stretch; min-height: 104px; }
-#rosto { width: 128px; height: 104px; flex: none; align-self: center; }
+.barra { display: flex; gap: 14px; align-items: stretch; min-height: 176px; }
+/* ela inteira, a ilustração da ficha, viva; também é a alça para arrastar a janela */
+#rosto { width: 116px; height: 176px; flex: none; align-self: center; cursor: grab; touch-action: none; }
+body.arrastando, body.arrastando * { cursor: grabbing !important; user-select: none; }
 
 .lado { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.topo { display: flex; align-items: center; gap: 8px; min-height: 22px; }
+.topo { display: flex; align-items: center; gap: 8px; min-height: 22px; cursor: grab; }
 .status { font-size: 12px; letter-spacing: .3px; color: var(--ametista); font-weight: 600; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; }
 .painel.alerta .status { color: var(--alerta); }
@@ -97,12 +101,12 @@ body.navegador { background: linear-gradient(135deg, #1f3b5c, #3a2d5c 55%, #5c2d
 
 /* ---------------- tarefa do modo agente (canto da tela, sem bloquear cliques) ---------------- */
 .tarefa-info { display: none; }
-.painel[data-modo="tarefa"] { left: auto; right: 12px; bottom: 12px; width: 400px; transform: none; }
+.painel[data-modo="tarefa"] { width: min(400px, calc(100% - 24px)); transform: none; }
 .painel[data-modo="tarefa"].visivel { transform: none; }
 .painel[data-modo="tarefa"] .conteudo { padding: 8px 12px 8px 6px; border-radius: 20px; }
 .painel[data-modo="tarefa"] .borda { border-radius: 22px; }
-.painel[data-modo="tarefa"] .barra { min-height: 70px; gap: 8px; }
-.painel[data-modo="tarefa"] #rosto { width: 84px; height: 68px; }
+.painel[data-modo="tarefa"] .barra { min-height: 88px; gap: 8px; }
+.painel[data-modo="tarefa"] #rosto { width: 58px; height: 88px; }
 .painel[data-modo="tarefa"] :is(.pedido, .resposta, .formulario, .botoes, .confirmar, .origem) { display: none !important; }
 .painel[data-modo="tarefa"] .tarefa-info { display: flex; flex-direction: column; gap: 5px; }
 .tarefa-titulo { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -153,5 +157,5 @@ body.navegador { background: linear-gradient(135deg, #1f3b5c, #3a2d5c 55%, #5c2d
 .passos li.erro::before { content: "✕"; color: var(--vermelho); }
 .passos li.pulado::before { content: "–"; }
 
-@media (max-width: 480px) { #rosto { width: 92px; height: 80px; } .resposta { font-size: 15px; } }
+@media (max-width: 480px) { #rosto { width: 84px; height: 128px; } .barra { min-height: 128px; } .resposta { font-size: 15px; } }
 @media (prefers-reduced-motion: reduce) { .borda { animation: none; } .painel { transition: opacity .2s; } }

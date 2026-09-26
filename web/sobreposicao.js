@@ -506,7 +506,45 @@
   $("btnPainel").onclick = () => noNavegador ? window.open("/painel", "_blank") : enviar({ tipo: "abrir_painel" });
   $("btnSim").onclick = () => enviar({ tipo: "responder", resposta: "sim" });
   $("btnNao").onclick = () => enviar({ tipo: "responder", resposta: "nao" });
-  $("rosto").onclick = () => { if (falando) { cancelarFala(); enviar({ tipo: "cancelar_escuta" }); } };
+  $("rosto").onclick = () => {
+    if (acabouDeArrastar) return;
+    if (falando) { cancelarFala(); enviar({ tipo: "cancelar_escuta" }); }
+  };
+
+  // Arrastar a janela pelo rosto ou pela barra de cima. Só depois de andar 4 px com o botão apertado (um clique
+  // continua sendo clique): o app pede ao Windows para mover a janela junto com o mouse e, se não der, segue os
+  // deslocamentos que mandamos daqui. Ela lembra onde você a deixou.
+  let arrasto = null, acabouDeArrastar = false;
+  function pegar(e) {
+    if (e.button !== 0 || noNavegador || modoTela === "tarefa" || e.target.closest("button, input, a")) return;
+    arrasto = { x: e.screenX, y: e.screenY, id: e.pointerId, alvo: e.currentTarget, movendo: false };
+  }
+  function soltar() {
+    if (!arrasto) return;
+    if (arrasto.movendo) {
+      enviar({ tipo: "mover_fim" });
+      acabouDeArrastar = true;
+      setTimeout(() => { acabouDeArrastar = false; }, 0);   // o clique que vem logo depois do soltar não conta
+    }
+    arrasto = null;
+    document.body.classList.remove("arrastando");
+  }
+  for (const alca of [$("rosto"), document.querySelector(".topo")]) alca.addEventListener("pointerdown", pegar);
+  addEventListener("pointermove", (e) => {
+    if (!arrasto || e.pointerId !== arrasto.id) return;
+    if (!(e.buttons & 1)) return soltar();                    // soltou fora (o Windows ficou com o mouse)
+    const dx = Math.round(e.screenX - arrasto.x), dy = Math.round(e.screenY - arrasto.y);
+    if (!arrasto.movendo) {
+      if (Math.hypot(dx, dy) < 4) return;
+      arrasto.movendo = true;
+      try { arrasto.alvo.setPointerCapture(e.pointerId); } catch { /* sem captura: segue pela janela */ }
+      document.body.classList.add("arrastando");
+      enviar({ tipo: "mover_inicio" });
+    }
+    enviar({ tipo: "mover", dx, dy });
+  });
+  addEventListener("pointerup", soltar);
+  addEventListener("pointercancel", soltar);
   document.querySelectorAll(".abas [data-aba]").forEach((b) => b.onclick = () => {
     document.querySelectorAll(".abas [data-aba]").forEach((x) => x.classList.toggle("ativa", x === b));
     for (const aba of ["conversa", "tarefas", "avisos", "historico"])

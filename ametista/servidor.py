@@ -649,6 +649,12 @@ async def conversa(ws: WebSocket):
                 if tipo == "cancelar_escuta":  # Esc / clique no rosto: cala e cancela a resposta em andamento
                     estado.cancelar_pedidos("pc")
                 eventos.publicar({**msg, "interno": True})
+            elif tipo in ("mover_inicio", "mover", "mover_fim"):   # arrastando a janela pelo rosto
+                try:
+                    dx, dy = int(msg.get("dx", 0)), int(msg.get("dy", 0))
+                except (TypeError, ValueError):
+                    continue
+                eventos.publicar({"tipo": tipo, "dx": dx, "dy": dy, "interno": True})
             elif tipo == "falando":
                 estado.definir_falando(bool(msg.get("valor")))
             elif tipo == "parar_tudo":

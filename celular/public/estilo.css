@@ -40,7 +40,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .cartao-pc { margin: 4px 16px 10px; padding: 12px; border-radius: 22px; background: var(--cartao);
   border: 1px solid var(--borda); display: flex; align-items: center; gap: 12px; }
-#rosto { width: 104px; height: 84px; flex: none; }
+#rosto { width: 76px; height: 116px; flex: none; }       /* ela inteira, a ilustração da ficha, viva */
 .info-pc { min-width: 0; }
 .estado-pc { font-weight: 600; font-size: 16px; }
 .detalhe-pc { color: var(--fraco); font-size: 13px; margin-top: 4px; line-height: 1.4; }

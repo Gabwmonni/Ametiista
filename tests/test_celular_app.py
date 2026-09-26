@@ -7,8 +7,9 @@ RAIZ = Path(__file__).resolve().parent.parent
 
 
 def test_rosto_do_celular_e_do_pc_sao_o_mesmo_arquivo():
-    assert (RAIZ / "celular" / "public" / "rosto.js").read_bytes() == (RAIZ / "web" / "rosto.js").read_bytes(), \
-        "copie web/rosto.js para celular/public/rosto.js"
+    for nome in ("rosto.js", "ametista-retrato.webp"):
+        assert (RAIZ / "celular" / "public" / nome).read_bytes() == (RAIZ / "web" / nome).read_bytes(), \
+            f"copie web/{nome} para celular/public/{nome}"
 
 
 def test_service_worker_tem_a_impressao_digital_dos_arquivos_atuais():
@@ -22,9 +23,14 @@ def test_service_worker_tem_a_impressao_digital_dos_arquivos_atuais():
 
 
 def test_app_leve():
-    """O que o celular baixa na primeira vez (compactado, como o Cloudflare entrega) continua pequeno."""
+    """O que o celular baixa na primeira vez (compactado, como o Cloudflare entrega) continua pequeno: o código
+    do app e as imagens (o ícone e ela, que ficam guardados no celular depois da primeira vez)."""
     publico = RAIZ / "celular" / "public"
-    total = sum(len(gzip.compress(p.read_bytes(), 9)) for p in publico.iterdir() if p.name != "icone-512.png")
-    assert total < 55_000, f"o app do celular cresceu para {total} bytes (compactado)"
+    tamanho = {p.name: len(gzip.compress(p.read_bytes(), 9)) for p in publico.iterdir()}
+    codigo = sum(v for k, v in tamanho.items() if not k.endswith((".png", ".webp", ".jpg")))
+    assert codigo < 30_000, f"o código do app do celular cresceu para {codigo} bytes (compactado)"
+    assert tamanho["ametista-retrato.webp"] < 40_000, "a ilustração dela ficou pesada"
+    total = sum(v for k, v in tamanho.items() if k != "icone-512.png")
+    assert total < 95_000, f"o app do celular cresceu para {total} bytes (compactado)"
     html = (publico / "index.html").read_text(encoding="utf-8")
     assert "fonts.googleapis" not in html and "http" not in re.sub(r"<!--.*?-->", "", html, flags=re.S)

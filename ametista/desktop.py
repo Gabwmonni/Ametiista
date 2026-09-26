@@ -1,6 +1,7 @@
 """App de desktop: sobreposição transparente por cima do Windows + ícone na bandeja.
 
 - Janela sem borda, sempre no topo, transparente, fora da barra de tarefas e fora dos prints.
+- Mora no canto esquerdo de baixo; arrastando pelo rosto ou pela barra de cima, fica onde você deixar.
 - Aparece sozinha quando ouve "Ametista", no atalho (Ctrl+Shift+Espaço) ou em avisos.
 - Três tamanhos: compacto (a barra), expandido (conversa, tarefas, avisos, histórico) e tarefa
   (um cartãozinho no canto enquanto o modo agente usa a tela; os cliques passam através dele).
@@ -26,9 +27,9 @@ from PySide6.QtWebEngineWidgets import QWebEngineView  # noqa: E402
 from PySide6.QtWidgets import (QApplication, QDialog, QInputDialog, QLabel, QMenu, QMessageBox,  # noqa: E402
                                QSystemTrayIcon, QVBoxLayout, QWidget)
 
-from . import agenda, autoinicio, config, estado, eventos, identidade, nuvem, servidor, spotify  # noqa: E402
+from . import agenda, autoinicio, config, estado, eventos, identidade, nuvem, posicao, servidor, spotify  # noqa: E402
 
-TAMANHOS = {"compacto": (760, 250), "expandido": (800, 650), "tarefa": (440, 130)}
+TAMANHOS = posicao.TAMANHOS
 
 
 class Ponte(QObject):
@@ -83,6 +84,11 @@ class Sobreposicao(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.web)
         self.web.load(QUrl(f"http://127.0.0.1:{config.PORTA}/?sobreposicao=1"))
+        self._alvo = QPoint()                 # onde o próprio app pôs a janela (mover para lá não é você arrastando)
+        self._inicio_arrasto: QPoint | None = None
+        self._arrasto_do_sistema = False
+        self._guardar_depois = QTimer(self, singleShot=True)
+        self._guardar_depois.timeout.connect(self._guardar_lugar)
         self.posicionar()
 
     def _aplicar_flags(self) -> None:
@@ -92,14 +98,46 @@ class Sobreposicao(QWidget):
         self.setWindowFlags(flags)
 
     def posicionar(self):
-        tela = QGuiApplication.primaryScreen().availableGeometry()  # já desconta a barra de tarefas
-        largura, altura = TAMANHOS.get(self.modo, TAMANHOS["compacto"])
-        altura = min(altura, tela.height() - 20)
-        if self.modo == "tarefa":
-            x, y = tela.right() - largura - 8, tela.bottom() - altura - 4
-        else:
-            x, y = tela.x() + (tela.width() - largura) // 2, tela.bottom() - altura - 4
+        """No lugar escolhido (ou no canto esquerdo de baixo), inteira dentro da tela onde ela está."""
+        ancora = posicao.ancora()
+        tela = QGuiApplication.screenAt(QPoint(ancora[0] + 40, ancora[1] - 40)) if ancora else None
+        area = (tela or QGuiApplication.primaryScreen()).availableGeometry()  # já desconta a barra de tarefas
+        x, y, largura, altura = posicao.geometria(self.modo, (area.x(), area.y(), area.width(), area.height()), ancora)
+        self._alvo = QPoint(x, y)
         self.setGeometry(x, y, largura, altura)
+
+    # ---- arrastar pelo rosto (a página avisa quando o mouse andou com o botão apertado)
+    def comecar_arrasto(self):
+        self._inicio_arrasto = self.pos()
+        janela = self.windowHandle()
+        try:  # o Windows move a janela junto com o mouse; se não der, seguimos os deslocamentos da página
+            self._arrasto_do_sistema = bool(janela and janela.startSystemMove())
+        except Exception:
+            self._arrasto_do_sistema = False
+
+    def arrastar(self, dx: int, dy: int):
+        if self._inicio_arrasto is not None and not self._arrasto_do_sistema:
+            self.move(self._inicio_arrasto + QPoint(dx, dy))
+
+    def terminar_arrasto(self):
+        if self._inicio_arrasto is not None:
+            self._inicio_arrasto, self._arrasto_do_sistema = None, False
+            self._guardar_lugar()
+
+    def moveEvent(self, evento):
+        super().moveEvent(evento)
+        if self.isVisible() and self.pos() != self._alvo:   # foi você que moveu: lembra o lugar
+            self._guardar_depois.start(500)
+
+    def _guardar_lugar(self):
+        g = self.geometry()
+        if g.topLeft() != self._alvo:
+            posicao.lembrar(g.x(), g.y(), g.height())
+            self._alvo = g.topLeft()
+
+    def voltar_ao_canto(self):
+        posicao.esquecer()
+        self.posicionar()
 
     def mudar_modo(self, modo: str):
         if modo not in TAMANHOS or modo == self.modo:
@@ -230,6 +268,7 @@ class Bandeja(QSystemTrayIcon):
         menu.addSeparator()
         menu.addAction("Configurações…", abrir_painel)
         menu.addAction("Conversa, tarefas e histórico", lambda: self.janela.mudar_modo("expandido"))
+        menu.addAction("Voltar a janela para o canto", self.janela.voltar_ao_canto)
         menu.addAction("Fazer um diagnóstico", self.diagnostico)
         vozes = menu.addMenu("Vozes")
         vozes.addAction("Cadastrar a minha voz", lambda: self.cadastrar(config.DONO, "dono"))
@@ -470,6 +509,12 @@ def main() -> int:
             esconder_timer.start(50)
         elif tipo == "tamanho":
             janela.mudar_modo(msg.get("modo", "compacto"))
+        elif tipo == "mover_inicio":
+            janela.comecar_arrasto()
+        elif tipo == "mover":
+            janela.arrastar(int(msg.get("dx", 0)), int(msg.get("dy", 0)))
+        elif tipo == "mover_fim":
+            janela.terminar_arrasto()
         elif tipo == "agente_tela":
             janela.mudar_modo("tarefa" if msg.get("ativo") else "compacto")
         elif tipo == "apontar":

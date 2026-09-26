@@ -1,6 +1,6 @@
 # Projeto Ametista 💜 v3.0
 
-Assistente de IA que vive no seu Windows, **por cima de qualquer programa**, com um rosto animado de olhos de cristal, monóculo e detalhes em metal líquido iridescente. Ela:
+Assistente de IA que vive no seu Windows, **por cima de qualquer programa**, num cantinho da tela: ela inteira, a ilustração da ficha de personagem, **viva** (pisca, fala, sorri, respira e os cristais brilham). Ela:
 
 - conversa por voz de verdade: começa a falar antes de terminar de pensar, pode ser **interrompida**, mantém a **conversa** sem você repetir o nome e entende pedidos incompletos ("abre de novo", "desfaz", "mais alto");
 - reconhece **quem está falando** e só obedece as vozes que você cadastrou;
@@ -29,6 +29,8 @@ Ela liga junto com o PC e fica quietinha no ícone 💎 perto do relógio.
 | Estudos | **Foco nos estudos**: sessões ("vou estudar cálculo por uma hora"), horários fixos, chamados quando a distração passa do limite, pausas e relatório da semana |
 | Cérebro local | O **Ollama** agora usa as ferramentas (arquivos, notas, programas, foco, lembretes, música...) e pode ser o cérebro principal |
 | Voz | **Voz clonada no próprio PC** num Python separado (placa NVIDIA, incluindo as RTX 50), fluida, sem pesar o resto; o `clonar_voz.bat` escolhe sozinho os melhores trechos das gravações |
+| Aparência | **Ela inteira, viva**, na barra do PC e no celular: a ilustração da ficha pisca, fala, sorri, respira e brilha |
+| Barra | No **canto esquerdo de baixo** (não tapa mais o meio da tela) e **arrastável** pelo rosto; lembra onde você a deixou |
 
 ## O que mudou da 1.0 para a 2.0
 
@@ -108,7 +110,7 @@ Para conferir se o celular está na versão nova: **Diagnóstico** no painel avi
 
 ## 4. A barra na tela, o menu e o painel
 
-A barra fica no canto da tela e some sozinha. Nela:
+A barra fica no **canto esquerdo de baixo** da tela (no meio ela tapava o que você estava usando) e some sozinha. Para mudar de lugar, **arraste pelo rosto dela** ou pela linha de cima da barra: ela fica onde você deixar, até depois de reiniciar, e cresce (conversa aberta) sem sair do lugar. Para voltar ao canto: menu do 💎 → **Voltar a janela para o canto**. Nela:
 
 - **■ Parar tudo**, **🔒 Modo privado** e **⤢ Expandir**;
 - **Sim / Não** quando ela pede confirmação;
@@ -121,7 +123,7 @@ A barra fica no canto da tela e some sozinha. Nela:
 - **Avisos**: lembretes e sugestões dela;
 - **Histórico**: tudo o que ela fez, com o botão **Desfazer**.
 
-**Menu do 💎** (botão direito): chamar, parar tudo, modo privado, não perturbe, microfone, **Configurações…**, diagnóstico, vozes, celular, contas e "Iniciar com o Windows".
+**Menu do 💎** (botão direito): chamar, parar tudo, modo privado, não perturbe, microfone, **Configurações…**, voltar a janela para o canto, diagnóstico, vozes, celular, contas e "Iniciar com o Windows".
 
 **Painel de configurações** (💎 → Configurações…): tudo o que antes era no `.env`, com explicação em cada item:
 
@@ -144,7 +146,7 @@ O jeito dela está no arquivo **`IDENTIDADE_DA_AMETISTA.md`**: quem ela é, como
 
 **A aparência dela** vem da ficha de personagem. De corpo inteiro, ela é a própria ilustração (aparece no painel, em **Personalidade**, e no ícone e na tela de pareamento do celular): cabelo branco-prateado com reflexos iridescentes preso num coque meio bagunçado, olhos azul-cristal, **monóculo de cristal** sobre o olho direito, filigranas com gotas de cristal sob os olhos e brincos longos.
 
-O **rosto animado** (barra do PC e celular) mostra só o essencial, flutuando: os olhos de cristal (íris azul em estrela, sombra rosa), o monóculo com lente iridescente, a boca e os detalhes em **metal líquido iridescente**: sobrancelhas, a renda com gotas de cristal sob os olhos, o arabesco e a corrente do monóculo. Ela pisca, olha em volta, flutua, mexe a boca com a voz e muda de expressão (feliz, pensativa, surpresa, triste, brava). Cada estado tem um sinal: brilho azul quando ouve, laranja no alerta, olhos fechados no modo privado e dormindo, sem cor quando está sem internet, e um ícone no canto (✦ pensando, cristal girando trabalhando, ? esperando resposta, cadeado, nuvem riscada, zz).
+Na **barra do PC e no celular** ela aparece inteira, a própria ilustração, **animada**: pisca de verdade (a pálpebra, com a maquiagem e os cílios dela, desce sobre o olho), a boca abre e fecha com a voz e sorri quando ela está feliz, respira, acena e balança a cabeça, os cristais do cabelo, dos brincos e do monóculo cintilam e um brilho iridescente passa de vez em quando. As emoções (feliz, pensativa, surpresa, triste, brava) mudam a luz e a cor. Cada estado tem um sinal: brilho azul quando ouve, laranja no alerta, olhos fechados no modo privado e dormindo, sem cor quando está sem internet, e um ícone no canto (✦ pensando, cristal girando trabalhando, ? esperando resposta, cadeado, nuvem riscada, zz).
 
 ---
 
@@ -550,7 +552,7 @@ Tudo isso também está no `.env` (o `.env.example` explica cada linha).
 
 ## 21. Leve para o PC
 
-- **Rosto:** a renda, as gotas e o monóculo são desenhados uma vez só; a cada quadro ela redesenha só olhos, sobrancelhas e boca, e flutua sem girar (girar custa mais). 24 quadros por segundo falando, 8 parada ou dormindo, e **zero** quando a barra está escondida.
+- **Rosto:** a ilustração é redimensionada uma vez só (uma imagem de 33 KB); a cada quadro só as pálpebras, a boca e os brilhos mexem por cima, e as cores das emoções são misturas simples (sem filtros). 24 quadros por segundo falando, 8 parada ou dormindo, e **zero** quando a barra está escondida.
 - **Palavra de ativação:** o reconhecedor descansa depois de 1,5 s de silêncio. No primeiro som ele volta, com o meio segundo anterior, para não perder o começo do "Ametista".
 - **Busca por significado:** o modelo carrega em segundo plano e nunca atrasa uma resposta.
 - **Celular:** sem ninguém olhando, nada de status, Spotify ou medição do PC.
