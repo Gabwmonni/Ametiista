@@ -34,7 +34,7 @@ class _Stream:
 
     def __iter__(self):
         for b in self.r.blocos:
-            if b.type == "tool_use":
+            if b.type in ("tool_use", "server_tool_use"):
                 yield SimpleNamespace(type="content_block_start", content_block=b)
         for p in self.r.pedacos:
             if self.cliente.ao_emitir:

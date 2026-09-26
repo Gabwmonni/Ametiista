@@ -29,9 +29,10 @@ Ela liga junto com o PC e fica quietinha no ícone 💎 perto do relógio.
 | Estudos | **Foco nos estudos**: sessões ("vou estudar cálculo por uma hora"), horários fixos, chamados quando a distração passa do limite, pausas e relatório da semana |
 | Cérebro local | O **Ollama** agora usa as ferramentas (arquivos, notas, programas, foco, lembretes, música...) e pode ser o cérebro principal |
 | Voz | **Voz clonada no próprio PC** num Python separado (placa NVIDIA, incluindo as RTX 50), fluida, sem pesar o resto; o `clonar_voz.bat` escolhe sozinho os melhores trechos das gravações |
-| Aparência | **Ela em 3D**, na barra do PC e no celular: uma malha feita no Blender, **editável e animável**, desenhada em estilo anime; pisca, olha em volta, fala com a boca (a, e, i, o, u), sorri, vira e inclina a cabeça, o cabelo balança e os cristais brilham |
+| Aparência | **Ela em 3D**, na barra do PC e no celular: o **modelo 3D dela** montado no Blender, **editável e animável**, com esqueleto e o rosto animado em malha; pisca, olha em volta, fala com a boca (a, e, i, o, u), sorri, cora, vira, acena e inclina a cabeça de verdade, respira, e os cristais brilham |
 | Barra | No **canto esquerdo de baixo** (não tapa mais o meio da tela) e **arrastável** pelo rosto; lembra onde você a deixou |
-| Ouvido | **Entende mais rápido**: transcreve já na pausa do fim da fala, identifica a voz ao mesmo tempo, Whisper aquecido e na placa NVIDIA quando funciona; nada se perde depois de um "Ametista" sozinho |
+| Ouvido | **Entende mais rápido**: transcreve já na pausa do fim da fala, identifica a voz ao mesmo tempo, Whisper aquecido e na placa NVIDIA quando funciona; nada se perde depois de um "Ametista" sozinho. **Sabe quando você terminou**: frase completa encerra mais cedo, frase parada no meio ("abre a pasta de...") espera você continuar; e não confunde a própria voz voltando pela caixa de som com você |
+| Conversa | Quando vai pesquisar, procurar um arquivo ou olhar a tela e ainda não disse nada, ela avisa numa frase curta ("deixa eu pesquisar"), sem repetir sempre a mesma |
 
 ## O que mudou da 1.0 para a 2.0
 
@@ -107,6 +108,8 @@ Para conferir se o celular está na versão nova: **Diagnóstico** no painel avi
 
 **Ela entende rápido:** a transcrição começa já na pausa do fim da sua fala (se você continuar falando, ela descarta e espera), confere quem está falando ao mesmo tempo, e o Whisper roda na **placa NVIDIA** quando ela funciona (sozinho: na primeira vez a placa é testada à parte, com o processador já ouvindo). Se você disser só "Ametista" e fizer uma pausa, o que disser em seguida não se perde.
 
+**Ela sabe quando você terminou:** pelas palavras, não só pelo silêncio. Uma frase completa ("que horas são?") encerra mais cedo; uma frase que parou no meio, terminando em "e", "de", "que", "para o"... ("abre a pasta de..."), espera até quase 2 segundos você achar a palavra. E, logo depois de ela falar, se o microfone pegar a própria voz dela voltando (uma caixa de som Bluetooth atrasada, por exemplo), ela percebe e ignora; um "para" ou "espera" sempre passa.
+
 **Pedidos difíceis:** ela começa a falar logo, com o modelo rápido. Se o pedido pedir mais (uma análise, uma explicação longa, olhar a tela, uma tarefa grande), ela passa para o modelo forte sozinha.
 
 ---
@@ -149,7 +152,7 @@ O jeito dela está no arquivo **`IDENTIDADE_DA_AMETISTA.md`**: quem ela é, como
 
 **A aparência dela** vem da ficha de personagem. De corpo inteiro, ela é a própria ilustração (aparece no painel, em **Personalidade**, e no ícone e na tela de pareamento do celular): cabelo branco-prateado com reflexos iridescentes preso num coque meio bagunçado, olhos azul-cristal, **monóculo de cristal** sobre o olho direito, filigranas com gotas de cristal sob os olhos e brincos longos.
 
-Na **barra do PC e no celular** ela é uma **malha 3D** (feita no Blender, em `modelo/ametista.blend`), desenhada em estilo anime: luz e sombra chapadas, contorno, olhos de cristal com a estrela na íris, monóculo de vidro iridescente, filigranas e brincos de cristal, cabelo branco-prateado com brilho e o coque com estrelas. Ela pisca (às vezes duas vezes), olha em volta, fala mexendo a boca nas vogais, sorri com os olhos (^^) quando está feliz, cora, arregala os olhos na surpresa, franze a testa brava, vira, acena e inclina a cabeça, respira, e o cabelo balança. As emoções (feliz, pensativa, surpresa, triste, brava) mudam a expressão, a luz e a cor. **Para editar a aparência ou as expressões**, veja `modelo/LEIA-ME-MODELO.md` (abrir no Blender, exportar, `modelo\aplicar_modelo.bat`). Num computador sem WebGL, entra o rosto de reserva (a ilustração animada). Cada estado tem um sinal: brilho azul quando ouve, laranja no alerta, olhos fechados no modo privado e dormindo, sem cor quando está sem internet, e um ícone no canto (✦ pensando, cristal girando trabalhando, ? esperando resposta, cadeado, nuvem riscada, zz).
+Na **barra do PC e no celular** ela é o **modelo 3D dela** (o busto: rosto, cabelo, monóculo, joias e roupa, em `modelo/fonte/ametista_3d.glb`), montado no Blender (`modelo/ametista.blend`) com um esqueleto (peito, pescoço e cabeça) e uma **máscara animada no rosto**: uma malha colada na pele, com a cor do próprio modelo, e atrás dela o branco dos olhos, as íris e a boca por dentro. Parada, é igual ao modelo; ela pisca (às vezes duas vezes, e os cílios descem junto com a pálpebra), olha em volta, fala mexendo a boca nas vogais, sorri com os olhos quando está feliz, cora, arregala os olhos na surpresa, franze a testa brava, vira, acena e inclina a cabeça em 3D, respira, e os cristais cintilam. As emoções (feliz, pensativa, surpresa, triste, brava) mudam a expressão, a luz e a cor. **Para editar a aparência ou as expressões**, veja `modelo/LEIA-ME-MODELO.md` (abrir no Blender, exportar, `modelo\aplicar_modelo.bat`). Num computador sem WebGL, entra o rosto de reserva (a ilustração animada). Cada estado tem um sinal: brilho azul quando ouve, laranja no alerta, olhos fechados no modo privado e dormindo, sem cor quando está sem internet, e um ícone no canto (✦ pensando, cristal girando trabalhando, ? esperando resposta, cadeado, nuvem riscada, zz).
 
 ---
 
@@ -539,7 +542,7 @@ Ela confere internet, Claude, Ollama (e se o modelo sabe usar as ferramentas), m
 | Às vezes não me reconhece | Pessoas → Rigor: 0.55, ou refaça o cadastro |
 | Reconhece gente demais | Pessoas → Rigor: 0.70 |
 | Transcrição lenta | Veja no diagnóstico se ela está transcrevendo na placa NVIDIA. Sem placa: Ouvido → Precisão: Rápida |
-| Ela me corta antes de eu terminar | Fale sem pausas longas no meio; se continuar, Ouvido → Sensibilidade: 200 (ela passa a perceber a fala mais baixa como fala) |
+| Ela me corta antes de eu terminar | Ela já espera mais quando a frase para no meio ("abre a pasta de..."); se continuar, Ouvido → Sensibilidade: 200 (ela passa a perceber a fala mais baixa como fala) |
 | Responde conversa que não era para ela | Ouvido → Minutos de conversa contínua: 1 (0 desliga) |
 | Ela me interrompe sozinha / se interrompe | Ouvido → Interromper pela voz: desligado |
 | Voz fina ou grossa demais, rápida ou lenta demais | Voz → Tom e Velocidade (toque em Ouvir para comparar antes de salvar) |
@@ -556,7 +559,7 @@ Tudo isso também está no `.env` (o `.env.example` explica cada linha).
 
 ## 21. Leve para o PC
 
-- **Rosto 3D:** ~20 mil triângulos, sem texturas, desenhado por um motor WebGL próprio e pequeno (não usa bibliotecas 3D grandes); o modelo tem ~360 KB. A cada quadro só as partes que mexem (olhos, boca, sobrancelhas) são recalculadas, e só quando mudam. 24 quadros por segundo falando, 8 parada ou dormindo, e **zero** quando a barra está escondida.
+- **Rosto 3D:** ~27 mil triângulos e duas texturas WebP, desenhado por um motor WebGL próprio e pequeno (não usa bibliotecas 3D grandes); o modelo tem ~1,1 MB (~700 KB para baixar no celular, uma vez só). As texturas são lidas uma vez, e a cada quadro só as partes que mexem (pálpebras, íris, boca, sobrancelhas) são recalculadas, e só quando mudam. 24 quadros por segundo falando, 8 parada ou dormindo, e **zero** quando a barra está escondida.
 - **Ouvido:** o Whisper é carregado e aquecido uma vez (a primeira frase já sai rápida), usa metade dos núcleos do processador (de 4 a 8) ou a placa NVIDIA, sem marcas de tempo e sem repetir a transcrição.
 - **Palavra de ativação:** o reconhecedor descansa depois de 1,5 s de silêncio. No primeiro som ele volta, com o meio segundo anterior, para não perder o começo do "Ametista".
 - **Busca por significado:** o modelo carrega em segundo plano e nunca atrasa uma resposta.
@@ -612,6 +615,7 @@ ametista/
   steam.py, agenda.py, spotify.py, nuvem.py
 celular/            app do celular (PWA) + ponte na Cloudflare + avisos push
 web/                sobreposição, rosto 3D (rosto.js + ametista.glb) e painel de configurações
-modelo/             ela em 3D para editar no Blender (ametista.blend), o script que a constrói e o aplicar_modelo.bat
+modelo/             ela em 3D para editar no Blender (ametista.blend), o modelo 3D original (fonte/), o rosto animado
+                    (rosto/), os scripts que a constroem e o aplicar_modelo.bat
 tests/              testes automáticos (rodam no GitHub a cada mudança)
 ```

@@ -294,3 +294,105 @@ def test_identifica_quem_fala_ao_mesmo_tempo_que_transcreve(o, monkeypatch):
     assert _esperar(lambda: o.pedidos)
     assert time.time() - inicio < 0.55, "as duas coisas rodam juntas (0,3 s cada)"
     assert abs(comecos["identificar"] - comecos["transcrever"]) < 0.15
+
+
+# ------------------------------------------------------------------ fim da fala pelas palavras
+def test_o_silencio_que_encerra_depende_das_palavras():
+    s = ouvido.silencio_para_encerrar
+    assert s("Ametista, que horas são?") == ouvido.SILENCIO_PRONTA
+    assert s("Ametista, toca Coldplay no Spotify.") == ouvido.SILENCIO_PRONTA
+    assert s("Ametista, você sabe o que é?") == ouvido.SILENCIO_PRONTA, "o ponto de interrogação fecha a frase"
+    for inacabada in ("Ametista, abre a pasta de", "Ametista, me lembra que...", "Ametista, anota isso,",
+                      "Ametista, marca uma reunião com o", "Ametista, abre o Word e"):
+        assert s(inacabada) == ouvido.SILENCIO_CONTINUA, inacabada
+    for curta in ("Ametista.", "Ametista, para", "obrigada", "sim"):
+        assert s(curta) == ouvido.SILENCIO_FIM, curta
+    assert ouvido.SILENCIO_PRONTA < ouvido.SILENCIO_FIM < ouvido.SILENCIO_CONTINUA
+
+
+def _adiantada_pronta(o):
+    return _esperar(lambda: o._adiantada is not None and o._adiantada.pronta)
+
+
+def test_frase_completa_encerra_mais_cedo(o, monkeypatch):
+    _transcricoes(o, monkeypatch, ["Ametista, que horas são?"])
+    _acordar(o)
+    _alimentar(o, ALTO, 10)
+    _alimentar(o, MUDO, 5)                                   # 0,4 s: a transcrição adiantada começa
+    assert _adiantada_pronta(o)
+    _alimentar(o, MUDO, 2)                                   # 0,56 s de silêncio já bastam
+    assert o.estado != "gravando"
+    assert _esperar(lambda: o.pedidos) and o.pedidos[0][0] == "que horas são"
+
+
+def test_frase_inacabada_espera_voce_continuar(o, monkeypatch):
+    chamadas = _transcricoes(o, monkeypatch, ["Ametista, abre a pasta de", "Ametista, abre a pasta de fotos"])
+    _acordar(o)
+    _alimentar(o, ALTO, 8)
+    _alimentar(o, MUDO, 5)
+    assert _adiantada_pronta(o)
+    _alimentar(o, MUDO, 10)                                  # 1,2 s pensando no nome da pasta: continua ouvindo
+    assert o.estado == "gravando"
+    _alimentar(o, ALTO, 6)                                   # "...fotos"
+    _alimentar(o, MUDO, 12)
+    assert _esperar(lambda: o.pedidos)
+    assert o.pedidos[0][0] == "abre a pasta de fotos" and len(chamadas) == 2
+
+
+def test_frase_inacabada_sem_continuacao_ainda_e_atendida(o, monkeypatch):
+    chamadas = _transcricoes(o, monkeypatch, ["Ametista, toca uma música e"])
+    _acordar(o)
+    _alimentar(o, ALTO, 8)
+    _alimentar(o, MUDO, 5)
+    assert _adiantada_pronta(o)
+    _alimentar(o, MUDO, 18)                                  # desistiu de completar: 1,8 s encerra
+    assert _esperar(lambda: o.pedidos)
+    assert o.pedidos[0][0] == "toca uma música e" and len(chamadas) == 1, "aproveita a transcrição adiantada"
+
+
+# ------------------------------------------------------------------ a própria voz voltando pelo microfone
+FALA = "Amanhã vai chover bastante em São Paulo, então leve o guarda-chuva quando sair."
+
+
+def test_eco_por_palavras():
+    assert ouvido.eco("leve o guarda-chuva quando sair", FALA)
+    assert ouvido.eco("vai chover bastante em São Paulo", FALA)
+    assert not ouvido.eco("e amanhã?", FALA), "pergunta curta com palavras comuns passa"
+    assert not ouvido.eco("e depois de amanhã?", FALA)
+    assert not ouvido.eco("toca uma música calma no Spotify", FALA)
+    assert not ouvido.eco("para", "Vou parar a música para você."), "um 'para' sempre passa"
+    assert not ouvido.eco("leve o guarda-chuva", "")
+
+
+def test_seguimento_ignora_a_propria_voz_e_ouve_a_pessoa(o, monkeypatch):
+    o.estado = "processando"
+    eventos.publicar({"tipo": "fala_inicio", "id": "r1"})
+    eventos.publicar({"tipo": "fala_trecho", "id": "r1", "texto": FALA})
+    eventos.publicar({"tipo": "fala_terminou", "id": "r1"})
+    assert o.estado == "seguimento"
+    _falar_pedido(o, "leve o guarda-chuva quando sair.", monkeypatch)      # a caixa de som atrasada
+    assert _esperar(lambda: o.estado == "seguimento")
+    time.sleep(0.05)
+    assert o.pedidos == []
+    _falar_pedido(o, "e depois de amanhã?", monkeypatch)
+    assert _esperar(lambda: o.pedidos)
+    assert o.pedidos[0][0] == "e depois de amanhã?"
+
+
+def test_com_o_nome_nunca_e_eco(o, monkeypatch):
+    o.estado = "processando"
+    eventos.publicar({"tipo": "fala_inicio", "id": "r1"})
+    eventos.publicar({"tipo": "fala_trecho", "id": "r1", "texto": FALA})
+    eventos.publicar({"tipo": "fala_terminou", "id": "r1"})
+    _falar_pedido(o, "Ametista, vai chover bastante em São Paulo?", monkeypatch)
+    assert _esperar(lambda: o.pedidos)
+
+
+def test_ruido_ambiente_desce_rapido_e_sobe_devagar(o):
+    o.ruido = 150.0
+    medio = (np.ones(ouvido.AMOSTRAS) * 300).astype(np.int16).tobytes()
+    _alimentar(o, medio, 10)
+    assert 150 < o.ruido < 185, "um barulho passageiro quase não mexe no limiar"
+    subiu = o.ruido
+    _alimentar(o, MUDO, 10)
+    assert o.ruido < subiu * 0.6, "ficou quieto: o ouvido volta a ficar sensível logo"

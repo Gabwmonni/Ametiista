@@ -9,6 +9,7 @@ Ordem de decisão:
      primeiro, se ele for o cérebro principal no painel.
 """
 import json
+import random
 import re
 import unicodedata
 from datetime import datetime
@@ -513,6 +514,53 @@ def _status(nome: str) -> None:
     eventos.publicar({"tipo": "status", "texto": _STATUS.get(nome, "trabalhando nisso…")})
 
 
+# Uma ferramenta demorada começou e ela ainda não disse nada: o silêncio parece travamento. Então ela fala uma
+# frase curta que combina com o que está fazendo ("deixa eu pesquisar"), uma vez por pedido e nunca a mesma da
+# última vez. Só para as ferramentas que buscam ou leem (as que pedem confirmação já falam a pergunta).
+_FRASES_ESPERA = {
+    "pesquisa": ["Deixa eu pesquisar.", "Vou dar uma olhada na internet.", "Só um instante, estou pesquisando."],
+    "tela": ["Deixa eu ver a tela.", "Deixa eu dar uma olhada.", "Olhando aqui."],
+    "arquivos": ["Deixa eu procurar.", "Procurando aqui.", "Só um instante, estou procurando."],
+    "memoria": ["Deixa eu lembrar.", "Hmm, deixa eu ver.", "Um segundo, estou lembrando."],
+    "clima": ["Deixa eu ver a previsão.", "Olhando o tempo aqui."],
+    "noticias": ["Deixa eu ver as notícias.", "Um instante, estou lendo as notícias."],
+    "outra": ["Só um instante.", "Deixa comigo.", "Hmm, deixa eu ver.", "Um segundinho."],
+}
+_ESPERA_DE = {
+    "web_search": "pesquisa", "pc_ver_tela": "tela", "arquivos_buscar": "arquivos", "arquivo_ler": "arquivos",
+    "pasta_listar": "arquivos", "memoria_buscar": "memoria", "caderno_buscar": "memoria", "clima": "clima",
+    "noticias": "noticias", "agenda_listar": "outra", "steam_buscar_jogo": "outra", "diagnostico": "outra",
+    "limpeza_analisar": "outra", "pc_processos": "outra", "foco_relatorio": "outra", "conversa_exportar": "outra",
+}
+_ultima_espera = ""
+
+
+def frase_de_espera(ferramenta: str) -> str | None:
+    """A frase curta para falar enquanto `ferramenta` trabalha (None se ela é rápida)."""
+    global _ultima_espera
+    tipo = _ESPERA_DE.get(ferramenta)
+    if tipo is None:
+        return None
+    opcoes = [f for f in _FRASES_ESPERA[tipo] if f != _ultima_espera]
+    _ultima_espera = random.choice(opcoes)
+    return _ultima_espera
+
+
+class Espera:
+    """Fala a frase de espera antes da primeira ferramenta demorada, se ela ainda não disse nada no pedido."""
+
+    def __init__(self, saida, ligada: bool = True):
+        self.saida, self.ligada = saida, ligada and saida is not None
+
+    def antes_de(self, ferramenta: str, ja_falou: bool) -> None:
+        if not self.ligada or ja_falou:
+            return
+        frase = frase_de_espera(ferramenta)
+        if frase:
+            self.ligada = False
+            self.saida.texto(frase + "\n")
+
+
 def _eco(conteudo: list) -> list:
     """Conteúdo do assistente para mandar de volta na próxima rodada.
 
@@ -529,7 +577,7 @@ def _texto_de(conteudo: list) -> str:
     return "".join(getattr(b, "text", "") for b in conteudo if getattr(b, "type", None) == "text")
 
 
-def _rodada(cliente, params: dict, modelo: str, saida, ficha):
+def _rodada(cliente, params: dict, modelo: str, saida, ficha, espera: "Espera | None" = None, ja_falou: bool = False):
     """Uma chamada em streaming. Manda o texto para a fala conforme chega; devolve a mensagem final."""
     if _usa_fallbacks(modelo):
         gerenciador = cliente.beta.messages.stream(betas=["server-side-fallback-2026-07-01"], fallbacks="default",
@@ -542,11 +590,14 @@ def _rodada(cliente, params: dict, modelo: str, saida, ficha):
                 raise Cancelado()
             tipo = getattr(ev, "type", None)
             if tipo == "text":
+                ja_falou = ja_falou or bool(ev.text.strip())
                 saida.texto(ev.text)
             elif tipo == "content_block_start":
                 bloco = getattr(ev, "content_block", None)
                 if getattr(bloco, "type", None) in ("tool_use", "server_tool_use"):
                     _status(getattr(bloco, "name", ""))
+                if getattr(bloco, "type", None) == "server_tool_use" and espera is not None:
+                    espera.antes_de(getattr(bloco, "name", ""), ja_falou)   # a busca na web roda no meio da rodada
         return stream.get_final_message()
 
 
@@ -562,12 +613,13 @@ def perguntar_claude(texto: str, falante=None, saida=None, ficha=None, sem_nome:
     sistema = [{"type": "text", "text": _prompt_estavel(tipo_modelo), "cache_control": {"type": "ephemeral"}},
                {"type": "text", "text": _prompt_contexto(falante, sem_nome, tipo_modelo, origem, troca_privada)}]
     completo = []
+    espera = Espera(saida, ligada=not sem_nome)
     for _ in range(10):  # limite de rodadas de ferramentas
         params = {"model": modelo, "max_tokens": 16000 if _e_modelo_novo(modelo) else 2048, "system": sistema,
                   "tools": ferramentas_api, "messages": mensagens}
         if _e_modelo_novo(modelo):
             params["output_config"] = {"effort": "medium" if tipo_modelo == "forte" else "low"}
-        r = _rodada(cliente, params, modelo, saida, ficha)
+        r = _rodada(cliente, params, modelo, saida, ficha, espera, any(c.strip() for c in completo))
         completo.append(_texto_de(r.content))
         if r.stop_reason == "refusal":
             recusa = " [triste] Desculpe, com isso eu não posso ajudar."
@@ -590,6 +642,7 @@ def perguntar_claude(texto: str, falante=None, saida=None, ficha=None, sem_nome:
         for b in usos:
             if ficha is not None and ficha.cancelado:
                 raise Cancelado()
+            espera.antes_de(b.name, any(c.strip() for c in completo))
             args = b.input if isinstance(b.input, dict) else {}
             conteudo = ferramentas.executar(b.name, args)
             resultados.append({"type": "tool_result", "tool_use_id": b.id, "content": conteudo})

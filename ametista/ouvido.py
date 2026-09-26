@@ -6,11 +6,13 @@ Etapas:
   3. PROCESSANDO faster-whisper transcreve e confere quem está falando (ao mesmo tempo). Para ser rápida, a
                  transcrição começa já na pausa do fim da fala (se você voltar a falar, ela é descartada), o
                  Whisper usa a placa NVIDIA quando dá (transcricao.py) e o que você diz enquanto ela processa
-                 um "Ametista" sozinho não se perde.
+                 um "Ametista" sozinho não se perde. A pausa que encerra o pedido depende das palavras: frase
+                 completa encerra antes; frase que termina em "e", "de", "que", "para o"... espera você continuar.
   4. FALANDO     Enquanto ela responde, só presta atenção em "Ametista" e em "para" (interrupção por voz).
   5. SEGUIMENTO  Logo depois da resposta, ouve alguns segundos sem precisar do nome.
      CONVERSA    Depois disso, por alguns minutos, continua atenta: se você falar com ela sem o nome, ela
-                 responde; se for conversa com outra pessoa ou a TV, ela ignora.
+                 responde; se for conversa com outra pessoa ou a TV, ela ignora. Nos dois, o que for a própria
+                 voz dela voltando pelo microfone (o fim da resposta numa caixa de som com atraso) é ignorado.
 """
 import json
 import re
@@ -31,6 +33,9 @@ BLOCOS_ATE_DESCANSAR = 19       # 1,5 s de silêncio e o reconhecedor da palavra
 PREROLL_ACORDAR = 8             # ao acordar, ele recebe os 0,64 s anteriores ao primeiro som
 SILENCIO_FIM = 0.8              # segundos de silêncio que encerram o pedido
 SILENCIO_ADIANTAR = 0.4         # com esse silêncio a transcrição já começa (e é descartada se você continuar)
+SILENCIO_PRONTA = 0.55          # ...e se ela já saiu e a frase parece completa, encerra com esse
+SILENCIO_CONTINUA = 1.8         # ...e se a frase claramente não acabou ("abre a pasta de"), espera até esse
+ECO_JANELA = 6.0                # segundos depois de ela falar em que a própria voz pode voltar pelo microfone
 DURANTE_MAX = 75                # até 6 s do que você diz enquanto ela processa um "Ametista" sozinho
 MAX_PEDIDO = 14
 ESPERA_SEM_FALA = 5
@@ -42,6 +47,23 @@ PARAR_FALA = re.compile(r"^(para|pare|parar|chega|silencio|cala|cala a boca|cala
                         r"pode parar|para de falar|para ai|tá bom para|ta bom para|stop)$")
 ALUCINACOES = re.compile(
     r"^(obrigad[oa]\.?|tchau\.?|legendas?.*|.*amara\.org.*|inscreva-se.*|\.+|\s*)$", re.I)
+
+# Terminar numa destas palavras quer dizer que a frase não acabou, seja qual for o silêncio. Só palavras de
+# ligação (artigos, preposições, conjunções, possessivos) e hesitações: nenhuma fecha um pedido de verdade.
+CONTINUA = frozenset("""
+e ou mas porque pois se que enquanto de do da dos das em no na nos nas num numa por pelo pela pelos pelas para pra
+pro com sem sobre entre ate ao aos o a os as um uma uns umas meu minha meus minhas seu sua seus suas teu tua nosso
+nossa esse essa aquele aquela lhe tipo hum humm hmm ahn eh
+""".split())
+# Palavras comuns demais para provar que o microfone ouviu a voz dela (só as outras contam como prova de eco).
+COMUNS = frozenset("""
+a o as os um uma uns umas e ou mas de do da dos das em no na nos nas num numa por pelo pela para pra pro com sem
+que se como quando onde qual quais quem porque ja nao sim mais muito muita bem so tambem entao aqui ali la agora
+isso isto esse essa este esta aquele aquela eu voce ele ela nos eles elas me te lhe meu minha seu sua teu tua
+nosso nossa e foi ser estar esta ta tem ter vai vou pode posso ok certo bom boa ai ne oi hum ah
+""".split())
+# Estas sempre passam, mesmo que ela tenha acabado de dizer a mesma coisa (um "para" nunca pode ser ignorado).
+SEMPRE_PASSA = re.compile(r"\b(para|pare|parar|chega|espera|cancela|cancelar|calma|silencio|cala|stop)\b")
 
 
 def _sem_acento(t: str) -> str:
@@ -57,6 +79,39 @@ def tirar_nome(texto: str) -> tuple[str, bool]:
     if len(texto[: m.start()].split()) > 2:
         return texto.strip(), True
     return texto[m.end():].strip(" ,.!?:"), True
+
+
+def _palavras(texto: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", _sem_acento(texto.lower()))
+
+
+def silencio_para_encerrar(texto: str) -> float:
+    """Quanto silêncio encerra o pedido, pelo que já foi dito (a transcrição adiantada)."""
+    t = texto.strip()
+    palavras = _palavras(t)
+    if len(palavras) <= 2:                       # o nome sozinho, "obrigada", "sim": o normal
+        return SILENCIO_FIM
+    if t[-1] in "?!":                            # pergunta ou exclamação fechada: acabou
+        return SILENCIO_PRONTA
+    if t.endswith(("...", "…")) or t[-1] in ",;:-–—" or palavras[-1] in CONTINUA:
+        return SILENCIO_CONTINUA
+    return SILENCIO_PRONTA
+
+
+def eco(ouvido: str, falado: str) -> bool:
+    """O que o microfone ouviu é a voz dela mesma voltando? Compara as palavras (a transcrição da própria voz
+    sai um pouco diferente, mas as palavras ficam), e só as que não são comuns contam como prova."""
+    if not falado.strip():
+        return False
+    todas = _palavras(ouvido)
+    if not todas or (len(todas) <= 3 and SEMPRE_PASSA.search(" ".join(todas))):
+        return False
+    dela = set(_palavras(falado))
+    raras = [p for p in todas if p not in COMUNS]
+    if len(raras) < 2:                           # sem prova forte: só se for tudo igual e não for curtinho
+        return len(todas) >= 3 and all(p in dela for p in todas)
+    iguais = sum(p in dela for p in raras)
+    return iguais >= 2 and iguais / len(raras) >= 0.6
 
 
 def _nivel(bloco: bytes) -> float:
@@ -128,6 +183,10 @@ class _Adiantada:
             self.erro = e
         self._pronta.set()
 
+    @property
+    def pronta(self) -> bool:
+        return self._pronta.is_set() and self.erro is None
+
     def resultado(self) -> str:
         self._pronta.wait()
         if self.erro:
@@ -161,6 +220,8 @@ class Ouvido:
         self._apos_fala = "espera"
         self._falando_desde = 0.0
         self._texto_falando = ""
+        self._ultima_fala, self._ultima_fala_fim = "", -99.0   # o que ela disse por último (contra o eco)
+        self._eco_ref = ""
         self._ultimo_mic = 0.0
         self._seg_ate = 0.0
         self._conversa_ate = 0.0
@@ -274,9 +335,14 @@ class Ouvido:
     def _modo_de_espera(self) -> str:
         return "conversa" if self.relogio < self._conversa_ate else "espera"
 
+    def _guardar_fala(self) -> None:
+        if self._texto_falando.strip():
+            self._ultima_fala, self._ultima_fala_fim = self._texto_falando, self.relogio
+
     def _depois_de_falar(self, forcar: str | None = None) -> None:
         if self._vosk:
             self._vosk.Reset()
+        self._guardar_fala()
         self._texto_falando = ""
         if self._cadastro_pendente:
             pedido, self._cadastro_pendente = self._cadastro_pendente, None
@@ -311,6 +377,7 @@ class Ouvido:
         estado.cancelar_pedidos("pc")
         self.estado = "espera"  # o "calar" abaixo não deve mexer no estado
         eventos.publicar({"tipo": "calar"})
+        self._guardar_fala()
         self._texto_falando = ""
         if self._vosk:
             self._vosk.Reset()
@@ -392,6 +459,8 @@ class Ouvido:
     def _iniciar_gravacao(self, origem: str, preroll: list[bytes]) -> None:
         self._reset_gravacao(origem, preroll)
         self.estado = "gravando"
+        recente = self.relogio - self._ultima_fala_fim < ECO_JANELA
+        self._eco_ref = self._ultima_fala if origem in ("seguimento", "conversa") and recente else ""
         if origem in ("nome", "manual"):
             eventos.publicar({"tipo": "acordou", "manual": origem == "manual"})
         elif origem == "seguimento":
@@ -417,8 +486,7 @@ class Ouvido:
         e = self.estado
 
         if e == "espera":
-            if nivel < self.ruido * 2.5:  # aprende o ruído ambiente
-                self.ruido = 0.97 * self.ruido + 0.03 * max(nivel, 20.0)
+            self._aprender_ruido(nivel)
             if self._vosk is None:
                 return
             # Economia: em silêncio o reconhecedor descansa. No primeiro som acima do ruído ele acorda e
@@ -445,6 +513,7 @@ class Ouvido:
                 self._iniciar_gravacao("nome", list(self.pre))
 
         elif e == "seguimento":
+            self._aprender_ruido(nivel)
             curto = self.relogio <= self._seg_ate
             if curto:
                 self._enviar_mic(nivel)
@@ -471,6 +540,13 @@ class Ouvido:
             if self.estado == "falando" and self.relogio - self._falando_desde > SEGURANCA_FALA:
                 self._depois_de_falar()
 
+    def _aprender_ruido(self, nivel: float) -> None:
+        """O ruído ambiente (a base do limiar de voz): desce rápido quando o lugar fica quieto e sobe devagar, para
+        um barulho passageiro não deixar o ouvido surdo. Som bem acima do ruído (voz) não entra na conta."""
+        if nivel < self.ruido * 2.5:
+            k = 0.08 if nivel < self.ruido else 0.02
+            self.ruido = (1 - k) * self.ruido + k * max(nivel, 20.0)
+
     def _gravar(self, bloco: bytes, nivel: float) -> None:
         self.audio.append(bloco)
         self.duracao += DUR
@@ -482,19 +558,29 @@ class Ouvido:
             if self._adiantada is not None and nivel > max(self.ruido * 1.8, 60.0):
                 self._depois_adiantar += 1              # som fraco depois de adiantar (uma última palavra baixa?)
         if self.origem == "cadastro":
-            espera_max = 12
+            espera_max, fim = 12, SILENCIO_FIM
         else:
             espera_max = ESPERA_SEM_FALA
             if self.falou and self._adiantada is None and self.silencio >= SILENCIO_ADIANTAR and \
                     self._whisper_pronto.is_set() and self.duracao < MAX_PEDIDO:
                 self._adiantada, self._depois_adiantar = _Adiantada(self, b"".join(self.audio)), 0
-        if (self.falou and self.silencio >= SILENCIO_FIM) or self.duracao >= MAX_PEDIDO or \
-                (not self.falou and self.duracao >= espera_max):
+            fim = self._silencio_fim()
+        acabou_a_fala = self.falou and self.silencio >= fim
+        if acabou_a_fala or self.duracao >= MAX_PEDIDO or (not self.falou and self.duracao >= espera_max):
             self.estado = "processando"
-            adiantada = self._adiantada if self._depois_adiantar < 2 and self.silencio >= SILENCIO_FIM else None
+            adiantada = self._adiantada if self._depois_adiantar < 2 and acabou_a_fala else None
             pcm, origem, falou = b"".join(self.audio), self.origem, self.falou
             self._adiantada, self._durante = None, []
-            threading.Thread(target=self._processar, args=(pcm, origem, falou, adiantada), daemon=True).start()
+            threading.Thread(target=self._processar, args=(pcm, origem, falou, adiantada, self._eco_ref),
+                             daemon=True).start()
+
+    def _silencio_fim(self) -> float:
+        """O silêncio que encerra o pedido: o normal, ou menos/mais se a transcrição adiantada já saiu e diz que
+        a frase acabou (ou que não acabou)."""
+        a = self._adiantada
+        if a is None or self._depois_adiantar >= 2 or not a.pronta:
+            return SILENCIO_FIM
+        return silencio_para_encerrar(a.texto)
 
     def _enviar_mic(self, nivel: float) -> None:
         if self.relogio - self._ultimo_mic >= 0.08:
@@ -508,7 +594,8 @@ class Ouvido:
             self.estado = "espera"
             eventos.publicar({"tipo": "ocioso"})
 
-    def _processar(self, pcm: bytes, origem: str, falou: bool, adiantada: "_Adiantada | None" = None) -> None:
+    def _processar(self, pcm: bytes, origem: str, falou: bool, adiantada: "_Adiantada | None" = None,
+                   eco_ref: str = "") -> None:
         conversa = origem == "conversa"
         try:
             if origem == "cadastro":
@@ -530,6 +617,10 @@ class Ouvido:
                     self._continuar_depois_do_nome()
                 else:
                     self._voltar_a_ouvir(conversa)
+                return
+            if eco_ref and not achou and eco(pedido, eco_ref):
+                print("[ouvido] era a própria voz dela voltando pelo microfone; ignorando")
+                self._voltar_a_ouvir(True)
                 return
             falante = quem.resultado()
             if falante.nivel == "desconhecido" or (conversa and not achou and identidade.tem_cadastro()

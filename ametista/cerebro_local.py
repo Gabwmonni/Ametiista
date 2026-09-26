@@ -324,6 +324,7 @@ def perguntar(texto: str, falante=None, saida=None, ficha=None, sem_nome: bool =
     tools = para_ollama(definicoes)
     completo: list[str] = []
     feitas: set[str] = set()
+    espera = cerebro.Espera(saida, ligada=not sem_nome)
     for rodada in range(MAX_RODADAS):
         dito, chamadas = _rodada(nome, mensagens, tools if rodada < MAX_RODADAS - 1 else [], saida, ficha,
                                  "thinking" in caps)
@@ -348,6 +349,7 @@ def perguntar(texto: str, falante=None, saida=None, ficha=None, sem_nome: bool =
                 else:
                     feitas.add(chave)
                     cerebro._status(ferramenta)
+                    espera.antes_de(ferramenta, any(x.strip() for x in completo))
                     resultado = _resultado_texto(ferramentas.executar(ferramenta, args))
             if resultado.startswith("PRECISA CONFIRMAR"):
                 # Modelos pequenos às vezes seguem em frente; aqui a pergunta sai do sistema e a conversa para.

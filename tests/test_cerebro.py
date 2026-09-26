@@ -261,3 +261,42 @@ def test_contexto_tem_ultimas_acoes_e_fatos(claude, dono, monkeypatch):
 def test_captura_de_tela_respeita_limites_do_modelo():
     assert controle.limites("claude-haiku-4-5") == (1568, 1_150_000)
     assert controle.limites("claude-opus-5") == (1920, 1920 * 1080)
+
+
+# ---------------------------------------------------------------- frase de espera (ferramenta demorada)
+def test_frase_de_espera_quando_a_ferramenta_demora_e_ela_nao_disse_nada(claude, dono, monkeypatch):
+    monkeypatch.setitem(ferramentas.FUNCOES, "memoria_buscar", lambda **k: "Ontem: o relatório de vendas.")
+    frases = []
+    for _ in range(2):
+        claude.roteiro = [Resposta([], [ferramenta("memoria_buscar", {"consulta": "ontem"})], "tool_use"),
+                          Resposta(["Você pediu o relatório de vendas."])]
+        saida = SaidaFalsa()
+        r = cerebro.pensar("o que eu te pedi ontem", saida=saida)
+        primeira, resto = saida.tudo.split("\n", 1)
+        assert primeira in cerebro._FRASES_ESPERA["memoria"] and resto == "Você pediu o relatório de vendas."
+        assert r["texto"] == "Você pediu o relatório de vendas.", "a frase de espera não entra no histórico"
+        frases.append(primeira)
+    assert frases[0] != frases[1], "não repete a mesma frase"
+
+
+def test_sem_frase_de_espera_se_ela_ja_falou_ou_a_ferramenta_e_rapida(claude, dono, monkeypatch):
+    monkeypatch.setitem(ferramentas.FUNCOES, "memoria_buscar", lambda **k: "nada")
+    claude.roteiro = [Resposta(["Hmm, deixa eu lembrar. "], [texto("Hmm, deixa eu lembrar. "),
+                                                            ferramenta("memoria_buscar", {"consulta": "x"})],
+                               "tool_use"),
+                      Resposta(["Não achei nada."])]
+    saida = SaidaFalsa()
+    cerebro.pensar("o que eu te falei sobre x", saida=saida)
+    assert saida.tudo == "Hmm, deixa eu lembrar. \nNão achei nada."
+    assert cerebro.frase_de_espera("pc_volume") is None and cerebro.frase_de_espera("pc_sistema") is None
+    nomes = set(ferramentas.FUNCOES) | {"web_search"}
+    assert set(cerebro._ESPERA_DE) <= nomes, set(cerebro._ESPERA_DE) - nomes
+
+
+def test_frase_de_espera_na_busca_na_web(claude, dono):
+    busca = SimpleNamespace(type="server_tool_use", id="srvtoolu_1", name="web_search", input={"query": "chuva"})
+    claude.roteiro = [Resposta(["Vai chover amanhã à tarde."], [busca, texto("Vai chover amanhã à tarde.")])]
+    saida = SaidaFalsa()
+    cerebro.pensar("pesquisa se vai chover amanhã em Campinas", saida=saida)
+    primeira, resto = saida.tudo.split("\n", 1)
+    assert primeira in cerebro._FRASES_ESPERA["pesquisa"] and resto == "Vai chover amanhã à tarde."
